@@ -17,8 +17,11 @@ def sign_delta(data)
 	@@private_key.sign(OpenSSL::Digest::SHA1.new, data)
 end
 
-def hash_delta(previous_hash, delta)
-	Digest::SHA2.digest("#{previous_hash}#{delta}")[0,20]
+def encode64(data)
+	Base64.encode64(data).gsub("\n", '')
+end
+def decode64(data)
+	Base64.decode64(data)
 end
 
 class ProtoBuffer
@@ -118,16 +121,12 @@ class ProtoBuffer
 end
 
 class FakeDelta
-	attr_accessor :wave
-	attr_reader :version
+	attr_accessor :wave, :version, :hash
 	
 	def initialize(wave)
 		@wave = wave
 		@version = 0
-	end
-	
-	def hash
-		@wave.conv_root_path
+		@hash = wave.conv_root_path
 	end
 end
 
@@ -141,6 +140,52 @@ class Delta
 		@hash = nil
 		@version = @applied_to.version + 1
 		@operations = []
+	end
+	
+	def self.parse wavelet, data
+		data = ProtoBuffer.parse data if data.is_a? String
+		
+		wavelet =~ /^(.+)\/w\+(.+)\/(.+)$/
+		wave_domain, wave_name, wavelet_name = $1, $2, $3
+		puts "Parsing #{wave_domain}'s #{wavelet_name} wavelet for w+#{wave_name}"
+		
+		wave = Wave.find wave_name
+		unless wave
+			wave = Wave.new wave_domain, wave_name
+			Wave.waves << wave
+		end
+		
+		applied_to = data[1].first[0].first
+		version = applied_to + 1
+		applied_to = get_delta(applied_to)
+		unless applied_to
+			applied_to = FakeDelta.new(wave)
+			applied_to.version = data[1].first[0].first
+			applied_to.hash = data[1].first[1].first
+		end
+		
+		return if wave.get_delta(version).is_a? Delta
+		
+		delta_data = data[0].first[0].first
+		delta = Delta.new(wave)
+		delta.applied_to = applied_to
+		delta.author = delta_data[1].first
+		#{0=>
+			#[{0=>
+				 #[{0=>
+						#[{0=>[1],
+							#1=>["\340\003\023yt\3001\346\vZ\212\220\a\222_n\371\024= "]}],
+					 #1=>["kevin@killerswan.com"],
+					 #2=>[{0=>["danopia@danopia.net"]}]}],
+				#1=>
+				 #[{0=>
+						#["Q\206\335\343\215\216D\330u'\020\331\327\325.ex\347y5\023\227\236\r\034\222\202\273\000E\263<\340<\357\2643\266\347y\206\235\256\311\234\026\205{\367\206\327\333 f\305\343M/B\315\215e\216\350G\177P'\333\335\r\360\337\332\354\354\n\026\206\037\335\306\023\303\037N3\205e\210\367_\240\311!U\252]\307\333>\235\207\242\267\202\2532\022\"\260H\227MF\314\005X\377Pp\226\177d\347\035\027}"],
+					 #1=>
+						#["\e\302\b\236\356\276\316\322Z\325\221e\e\001\357i[\21345\223%}l\322\334\230\234\220\351m\241"],
+					 #2=>[1]}]}],
+		 #1=>[{0=>[1], 1=>["\340\003\023yt\3001\346\vZ\212\220\a\222_n\371\024= "]}],
+		 #2=>[1],
+		 #3=>[1256114214507]}
 	end
 	
 	def raw
@@ -168,7 +213,7 @@ class Delta
 				0 => @applied_to.version, # previous version
 				1 => @applied_to.hash # previous hash
 			},
-			2 => 1, #@operations.size, # operations applied
+			2 => @operations.size, # operations applied
 			3 => Time.now.to_i * 1000 # milliseconds not needed yet
 		})#[1..-1]
 	end
@@ -178,12 +223,16 @@ class Delta
 	end
 	
 	def propagate
-	
+		
 	end
 end
 
 class Wave
 	attr_accessor :deltas, :host, :name
+	
+	def self.waves
+		@waves ||= []
+	end
 	
 	def initialize(host, name)
 		@host = host
@@ -196,28 +245,48 @@ class Wave
 		"wave://#{host}/w+#{name}/conv+root"
 	end
 	
+	def conv_root_path2
+		"#{host}/w+#{name}/conv+root"
+	end
+	
 	def new_delta(author=nil)
 		delta = Delta.new self
 		delta.author = author
 		@deltas << delta
 		delta
 	end
+	
+	def self.find(name)
+		return nil unless name
+		
+		waves = @waves.select{|wave| wave.name == id}
+		return nil if waves.empty?
+		waves.first
+	end
+	
+	def get_delta(version)
+		return nil unless version
+		
+		deltas = @deltas.select{|delta| delta.version == version}
+		return nil if deltas.empty?
+		deltas.first
+	end
 end
 
-wave = Wave.new('danopia.net', 'BHW1z9FOWKum')
+#wave = Wave.new('danopia.net', 'BHW1z9FOWKum')
 
-delta = wave.new_delta 'me@danopia.net'
-delta.operations << {2 => 'me@danopia.net'} # Add myself to the conv_root_path
-delta.propagate
-delta.hash
+#delta = wave.new_delta 'me@danopia.net'
+#delta.operations << {2 => 'me@danopia.net'} # Add myself to the conv_root_path
+#delta.propagate
+#delta.hash
 
-delta = wave.new_delta 'me@danopia.net'
-delta.operations << {2 => 'echoey@kshh.us'} # Add an echoey to the wave
-delta.propagate
-delta.hash
+#delta = wave.new_delta 'me@danopia.net'
+#delta.operations << {2 => 'echoey@kshh.us'} # Add an echoey to the wave
+#delta.propagate
+#delta.hash
 
-pp wave.deltas
-
+#pp wave.deltas
+pp Delta.parse('killerswan.com/w+l5PdmqP1fk7y/conv+root', decode64('CuMCCrYBChgIBRIUQMqHNhGIufPL+x6p4yduyHwjOqESFGtldmluQGtpbGxlcnN3YW4uY29tGoMBGoABCgRtYWluEngKAihRCiQaIgoEbGluZRIaCgJieRIUa2V2aW5Aa2lsbGVyc3dhbi5jb20KAiABCkgSRmkgZG9uJ3Qgc2VlIHRoZSBkaWZmZXJlbmNlIGJldHdlZW4gbWluZSBhbmQgeW91cnMsIGJ1dCBoZWxsLCB3aG8ga25vd3MSpwEKgAEd99hVpTJdkEO2GGOLBpPVw11V9PEuInlk7hAlrK9KdYziQ4n9K24Om2DQ17fufpIcgM+PUpwd3Ky2qMe7CrpsEEye9B/Gy9m7hqnqH31fBz1ZenkGYoGH+3lC3t/GPq9lnsrhhc78/QDYkR1lPrxGgQ1H1yc+Pl1guzMLdIEosxIgG8IInu6+ztJa1ZFlGwHvaVuLNDWTJX1s0tyYnJDpbaEYARIYCAUSFEDKhzYRiLnzy/seqeMnbsh8IzqhGAEgmJb7scck'))
 exit
 
 #sleep 5
@@ -261,7 +330,7 @@ if message != '<handshake></handshake>'
 end
 
 puts 'Sending ping to kshh.us'
-sock.send_xml '<iq type="get" id="5328-0" to="r-o-o-t.net" from="' + myname + '"><query xmlns="http://jabber.org/protocol/disco#items"/></iq>'
+sock.send_xml '<iq type="get" id="5328-0" to="kshh.us" from="' + myname + '"><query xmlns="http://jabber.org/protocol/disco#items"/></iq>'
 
 puts 'Setting up keepalive thread'
 Thread.new do
@@ -301,9 +370,24 @@ until sock.closed?
 					sock.send_xml '<iq type="result" id="' + id + '" from="' + myname + '" to="' + from + '"><query xmlns="http://jabber.org/protocol/disco#info"><identity category="collaboration" type="google-wave" name="Google Prototype Wave Server - FedOne"/><feature var="http://waveprotocol.org/protocol/0.2/waveserver"/></query></iq>'
 					
 				# <iq type="get" id="4605-148" from="wave.kshh.us" to="wave.danopia.net"><pubsub xmlns="http://jabber.org/protocol/pubsub"><items node="wavelet"><delta-history xmlns="http://waveprotocol.org/protocol/0.2/waveserver" start-version="0" start-version-hash="d2F2ZTovL2Rhbm9waWEubmV0L3crRWx4cG04bWpCN0tJL2NvbnYrcm9vdA==" end-version="3" end-version-hash="RNy5arFR2hAXu+q63y4ESDbWRvE=" wavelet-name="danopia.net/w+Elxpm8mjB7KI/conv+root"/></items></pubsub></iq>
+				# start hash: wave://danopia.net/w+Elxpm8mjB7KI/conv+root
+				# end hash: gobbledegook
 				elsif (packet/'pubsub').any?
 					puts "#{from} requested a delta"
-					sock.send_xml '<iq type="result" id="' + id + '" from="' + myname + '" to="' + from + '"><pubsub xmlns="http://jabber.org/protocol/pubsub"><items><item><applied-delta xmlns="http://waveprotocol.org/protocol/0.2/waveserver"><![CDATA[CokCCl0KLwgAEit3YXZlOi8vZGFub3BpYS5uZXQvdytFbHhwbThtakI3S0kvY29udityb290EhNkYW5vcGlhQGRhbm9waWEubmV0GhUKE2Rhbm9waWFAZGFub3BpYS5uZXQSpwEKgAGz82n9YVZnwleA9O8EeAa7kls02MnZR5+VzQpZAUAwXZntnLuXCBHxHru7Z9KqHCzy9bPvG+3tuoJcrujwFgRgacW4XVNF0z+dOxWaxJaJT9hTzkiZ9d8tuogW77HxhLZwFa2AwKZV0MvPmUgnkKBlqLJnuivr1zDk7tjqUMydLhIgSofNg7c6VnWEjpQEWy4JKPcwAvzENXs39cRgcVgYd8UYARIvCAASK3dhdmU6Ly9kYW5vcGlhLm5ldC93K0VseHBtOG1qQjdLSS9jb252K3Jvb3QYASC9iKqrxiQ=]]></applied-delta></item><item><applied-delta xmlns="http://waveprotocol.org/protocol/0.2/waveserver"><![CDATA[Cu8BCkMKGAgBEhTxh3vZ7/h+voajDiSHnG0LIWJILRITZGFub3BpYUBkYW5vcGlhLm5ldBoSChBtZWVwQGRhbm9waWEubmV0EqcBCoABg/iZZ6ZSdL7t+gPU0XDJsd+pMChmU0gFSTFWkvDvZ05NRIncA9hWS2aiS7Sn+wLvCYAsbW2c6B8qRgFWuSSe/eOOOPqFF0cP8uS9ekz6uavQojCkl+Ij7bMrr46LvU66oR1v4+ndfVr/xJrR7dvS0jl3ymAkHe3w8lUQdPfgQJASIEqHzYO3OlZ1hI6UBFsuCSj3MAL8xDV7N/XEYHFYGHfFGAESGAgBEhTxh3vZ7/h+voajDiSHnG0LIWJILRgBIKPkqqvGJA==]]></applied-delta></item><item><applied-delta xmlns="http://waveprotocol.org/protocol/0.2/waveserver"><![CDATA[CpYCCmoKGAgCEhSlskJ2QEVDSeR/hN+QsPVnN9T0kRITZGFub3BpYUBkYW5vcGlhLm5ldBo5GjcKBG1haW4SLwojGiEKBGxpbmUSGQoCYnkSE2Rhbm9waWFAZGFub3BpYS5uZXQKAiABCgQSAmhpEqcBCoABoO2816jli/LHg6KJayGTV1ifIniLQDqSzoMHuVaZEQAAmqT6jR830qPYec3jK2eMuKepFkucig4UyuOsY2zkErZD/opKJhi44cOcEA+GY3arpp9JwgM+Y99M55+dD+fT2dupgBMEUrESZP0mx3QMGUnbAJ5/+vnSZcDzn1NQRgYSIEqHzYO3OlZ1hI6UBFsuCSj3MAL8xDV7N/XEYHFYGHfFGAESGAgCEhSlskJ2QEVDSeR/hN+QsPVnN9T0kRgBIIr1qqvGJA==]]></applied-delta></item><item><commit-notice xmlns="http://waveprotocol.org/protocol/0.2/waveserver" version="3"/></item><item><history-truncated xmlns="http://waveprotocol.org/protocol/0.2/waveserver" version="3"/></item></items></pubsub></iq>'
+					
+					wave = Wave.new(mydomain, 'BHW1z9FOWKun')
+					
+					delta = wave.new_delta "me@#{mydomain}"
+					delta.operations << {2 => "me@#{mydomain}"}
+					#delta.propagate
+					
+					delta = wave.new_delta "me@#{mydomain}"
+					delta.operations << {2 => "echoey@#{from}"}
+					#delta.propagate
+					
+					waves << wave unless waves.include? wave
+					
+					sock.send_xml '<iq type="result" id="' + id + '" from="' + myname + '" to="' + from + '"><pubsub xmlns="http://jabber.org/protocol/pubsub"><items><item><applied-delta xmlns="http://waveprotocol.org/protocol/0.2/waveserver"><![CDATA[' + Base64.encode64(wave.deltas[1].to_s).gsub("\n", '') + ']]></applied-delta></item><item><applied-delta xmlns="http://waveprotocol.org/protocol/0.2/waveserver"><![CDATA[' + Base64.encode64(wave.deltas[2].to_s).gsub("\n", '') + ']]></applied-delta></item><item><commit-notice xmlns="http://waveprotocol.org/protocol/0.2/waveserver" version="' + wave.deltas.last.version + '"/></item><item><history-truncated xmlns="http://waveprotocol.org/protocol/0.2/waveserver" version="' + wave.deltas.last.version + '"/></item></items></pubsub></iq>'
 					
 				end
 				
@@ -348,7 +432,20 @@ until sock.closed?
 				
 				elsif (packet/'pubsub/publish/item/signature-response').any?
 					puts "#{from} responded to cert, now to send a wave."
-					sock.send_xml '<message type="normal" from="' + myname + '" id="4597-8" to="' + from + '"><request xmlns="urn:xmpp:receipts"/><event xmlns="http://jabber.org/protocol/pubsub#event"><items><item><wavelet-update xmlns="http://waveprotocol.org/protocol/0.2/waveserver" wavelet-name="' + mydomain + '/w+Elxpm8mjB7KI/conv+root"><applied-delta><![CDATA[Cu0BCkEKGAgDEhRE3LlqsVHaEBe76rrfLgRINtZG8RITZGFub3BpYUBkYW5vcGlhLm5ldBoQCg5lY2hvZXlAa3NoaC51cxKnAQqAARKhWHLH9d3IyCDE7KihB58YsnYZqD4UDpzeVRB0F9bKGfyb8vaElXuJBWWmU1OEO6RJ25uzb9CTGhyR6Vrvm0loGhvOAkxYn0YpWpNvVADlpKt/x0xEi37FCRnf/d1/ojohnYRKBpQAHVx8nHbfTWXq+UYFXUSulX1u7TzrWJoFEiBKh82DtzpWdYSOlARbLgko9zAC/MQ1ezf1xGBxWBh3xRgBEhgIAxIURNy5arFR2hAXu+q63y4ESDbWRvEYASCfq66rxiQ=]]></applied-delta></wavelet-update></item></items></event></message>'
+					
+					wave = Wave.new(mydomain, 'BHW1z9FOWKun')
+					
+					delta = wave.new_delta "me@#{mydomain}"
+					delta.operations << {2 => "me@#{mydomain}"}
+					#delta.propagate
+					
+					delta = wave.new_delta "me@#{mydomain}"
+					delta.operations << {2 => "echoey@#{from}"}
+					#delta.propagate
+					
+					waves << wave unless waves.include? wave
+					
+					sock.send_xml '<message type="normal" from="' + myname + '" id="4597-8" to="' + from + '"><request xmlns="urn:xmpp:receipts"/><event xmlns="http://jabber.org/protocol/pubsub#event"><items><item><wavelet-update xmlns="http://waveprotocol.org/protocol/0.2/waveserver" wavelet-name="' + wave.conv_root_path2 + '"><applied-delta><![CDATA[' + encode64(wave.deltas[2].to_s) + ']]></applied-delta></wavelet-update></item></items></event></message>'
 				end
 			
 			when name == 'message' && (type == 'normal' || !type)
@@ -364,6 +461,12 @@ until sock.closed?
 						
 					else
 						puts "#{from} ACK'ed our previous packet."
+					end
+					
+				elsif subtype == 'request'
+					(packet/'request/event/items/item/wavelet-update').each do |update|
+						delta = Delta.parse(update['wavelet-name'], update.inner_text)
+						puts "Got a delta, version #{delta.version}"
 					end
 					
 				end
