@@ -5,26 +5,12 @@ require 'digest/sha2'
 require 'rubygems'
 require 'hpricot'
 
-require 'socket'
 require 'stringio'
 require 'base64'
+require 'pp'
+require 'openssl'
 sleep 2
 
-  #delta: "\n\030\b\003\022\024\326\002\021j\213\334J\256\253G;^\270\274\022\274\003Gq\307\022\023danopia@danopia.net\032D\032B\n\004main\022:\n\002(\004\n#\032!\n\004line\022\031\n\002by\022\023danopia@danopia.net\n\002 \001\n\v\022\twhat\'s up"
-  #signature {
-    #signature_bytes: "\030\006\364\331\352\355tn\266\206\301\353m\247\020lb2n:T.\227\325\366%,s\312\355t\f<C\003C;\303\212|\031\"\024\261\2779\363\366(WF!\"\370\353\0353\301\240\233\2346\206\261\361\017H\356\235\017Z@\242\340\277\232OYD?\020q\tT\020\001Ec\361\003\352j\332\276\252p6c\273^9\232/\273I4y8:\372\343!r;\232EMK\323\330D\207\000c\2778O"
-    #signer_id: "J\207\315\203\267:Vu\204\216\224\004[.\t(\3670\002\374\3045{7\365\304`qX\030w\305"
-    #signature_algorithm: SHA1_RSA
-  #}
-#}
-#hashed_version_applied_at {
-  #version: 3
-  #history_hash: "\326\002\021j\213\334J\256\253G;^\270\274\022\274\003Gq\307"
-#}
-#operations_applied: 1
-#application_timestamp: 1255981572223
-
-require 'openssl'
 
 def sign_delta(data)
 	@@private_key ||= OpenSSL::PKey::RSA.new(File.open("../danopia.net.key").read)
@@ -42,61 +28,46 @@ class ProtoBuffer
 		puts "Parsing #{data.string.inspect}"
 		
 		hash = {}
-		until data.eof?
-			parse_args hash, data, []
-		end
+		parse_args hash, data, [] until data.eof?
 		
-		puts "Done."
-		p hash
+		#puts "Done."
+		#pp hash
 		
 		hash
 	end
 	
 	def self.parse_args(parent_args, data, tree)
-		puts "Reading a byte."
-		key = (data.getc-10).to_f/8
-		if key == -2
-			puts "RETURNED"
-			return
-		end
+		key = data.getc
+		type = key % 8
+		key = (key / 8) - 1
 		
-		if key == -0.25 || key == 1.75 || key == 2.75 #|| (tree.size == 3 && tree[2] == 0 && key == 1)
-			key = 0 if key == -0.25
-			key = 2 if key == 1.75
-			key = 3 if key == 2.75
-			#data.getc if raw.string[0] == 8
+		value = -1
+		
+		if type == 0 # Varint
 			value = read_varint(data)
-			puts ('  '*tree.size) + "#{key} => int: #{value}"
-			parent_args[key] ||= []
-			parent_args[key] << value
-			return
-		end
-		key = key.to_i
+			#puts "#{'  '*(tree.size+1)}#{key} => int: #{value}"
 		
-		args = {}
-		puts ('  '*tree.size) + "Reading \##{key}. Tree: #{tree.join(' -> ')} BYTES: #{data.string.size - data.pos}"
-		raw = StringIO.new(read_string(data))
-		puts ('  '*tree.size) + "Parsing \##{key}. Tree: #{tree.join(' -> ')} Data: #{raw.string.inspect}"
+		elsif type == 2 # Fixed-width (e.g. strings)
+			value = {}
+			raw = StringIO.new(read_string(data))
+			#puts "#{'  '*tree.size}Parsing \##{key}. Tree: #{tree.join(' -> ')} Data: #{raw.string.inspect}"
+			
+			if (1..8).to_a.map{|num|(2+num*8)}.include?(raw.string[0]) || raw.string[0] == 8
+				parse_args value, raw, tree + [key] until raw.eof?
+			else
+				#puts "#{'  '*tree.size}String: #{raw.string.inspect}"
+				value = raw.string
+			end
 		
-		if !(1..8).to_a.map{|num|(2+num*8)}.include?(raw.string[0]) && raw.string[0] != 8
-			puts ('  '*tree.size) + "String: #{raw.string.inspect}"
-			parent_args[key] ||= []
-			parent_args[key] << raw.string
-			return
+		else
+			puts "Unknown type: #{type}"
 		end
-		
-		tree << key
-		until raw.eof?
-			parse_args args, raw, tree
-		end
-		tree.pop
 		
 		parent_args[key] ||= []
-		parent_args[key] << args
+		parent_args[key] << value
 	end
 	
 	def self.read_varint(io)
-		puts "Reading a varint..."
 		index = 0
 		value = 0
 		while true
@@ -105,17 +76,12 @@ class ProtoBuffer
 				value |= (byte & 0x7F) << index
 				index += 7
 			else
-				value |= byte << index
-				#io.ungetc byte
-				puts "Read #{index/7+1} bytes."
-				return value
+				return value | byte << index
 			end
 		end
 	end
 	def self.read_string(io)
-		size = read_varint(io)
-		p size
-		io.read size
+		io.read read_varint(io)
 	end
 
 	def self.write_varint(value)
@@ -138,7 +104,7 @@ class ProtoBuffer
 				if arg.is_a? Hash
 					output << (type*8+10).chr
 					write_string output, encode(arg)
-				elsif arg.is_a? Fixnum
+				elsif arg.is_a?(Fixnum) || arg.is_a?(Bignum)
 					output << (type*8+8).chr
 					output << write_varint(arg)
 				else
@@ -151,52 +117,108 @@ class ProtoBuffer
 	end
 end
 
-#	\n\355\001 - arg 0 (length 237)
-#		\nA - arg 0 (length 65)
-# 		\n\030 - arg 0 (length 24)
-#				\b\003 - arg 0 (varint) - 3
-#					\022\024 - arg 1 (string) - D\334\271j\261Q\332\020\027\273\352\272\337.\004H6\326F\361
-#			\022\023 - arg 1 (string) - danopia@danopia.net
-#			\032\020 - arg 2 (length 16)
-#				\n\016 - arg 0 (string) - echoey@kshh.us
-#	\022\247\001 - arg 1 (length 167)
-#		\n\200\001 - arg 0 (length 128)
-#			\022\241Xr\307\365\335\310\310 \304\354\250\241\a\237\030\262v\031\250>\024\016\234\336U\020t\027\326\312\031\374\233\362\366\204\225{\211\005e\246SS\204;\244I\333\233\263o\320\223\032\034\221\351Z\357\233Ih\032\e\316\002LX\237F)Z\223oT\000\345\244\253\177\307LD\213~\305\t\031\337\375\335\372#\242\031\330D\240i@\001\325\307\311\307m\364\326^\257\224`U\324J\351W\326\356\323\316\265\211\240Q\"\004\250|\330;s\245gXH\351@E\262\340\222\217s\000/\314CW\263\177\\F\a\025\201\207|Q\200\021
+class FakeDelta
+	attr_accessor :wave
+	attr_reader :version
+	
+	def initialize(wave)
+		@wave = wave
+		@version = 0
+	end
+	
+	def hash
+		@wave.conv_root_path
+	end
+end
 
-#!\200\2001!DM\313\226\253\025\035\241\001{\276\253\255\362\340D\203mdo\021\200\022\t\372\272\352\274b@
+class Delta
+	attr_accessor :applied_to, :wave, :author, :version, :operations
+	
+	def initialize(wave)
+		@applied_to = wave.deltas.last
+		@wave = wave
+		@author = nil
+		@hash = nil
+		@version = @applied_to.version + 1
+		@operations = []
+	end
+	
+	def raw
+		ProtoBuffer.encode({
+			0 => {
+				0 => @applied_to.version,
+				1 => @applied_to.hash
+			},
+			1 => @author,
+			2 => @operations
+		})
+	end
+	
+	def to_s
+		ProtoBuffer.encode({
+			0 => {
+				0 => raw,
+				1 => {
+					0 => sign_delta(raw),
+					1 => "J\207\315\203\267:Vu\204\216\224\004[.\t(\3670\002\374\3045{7\365\304`qX\030w\305",
+					2 => 1 # alg (rsa)
+				}
+			},
+			1 => {
+				0 => @applied_to.version, # previous version
+				1 => @applied_to.hash # previous hash
+			},
+			2 => 1, #@operations.size, # operations applied
+			3 => Time.now.to_i * 1000 # milliseconds not needed yet
+		})#[1..-1]
+	end
+	
+	def hash
+		@hash = Digest::SHA2.digest("#{@applied_to.hash}#{raw}")[0,20]
+	end
+	
+	def propagate
+	
+	end
+end
 
-data = "\n\355\001\nA\n\030\b\003\022\024D\334\271j\261Q\332\020\027\273\352\272\337.\004H6\326F\361\022\023danopia@danopia.net\032\020\n\016echoey@kshh.us\022\247\001\n\200\001\022\241Xr\307\365\335\310\310 \304\354\250\241\a\237\030\262v\031\250>\024\016\234\336U\020t\027\326\312\031\374\233\362\366\204\225{\211\005e\246SS\204;\244I\333\233\263o\320\223\032\034\221\351Z\357\233Ih\032\e\316\002LX\237F)Z\223oT\000\345\244\253\177\307LD\213~\305\t\031\337\375\335\372#\242\031\330D\240i@\001\325\307\311\307m\364\326^\257\224`U\324J\351W\326\356\323\316\265\211\240Q\"\004\250|\330;s\245gXH\351@E\262\340\222\217s\000/\314CW\263\177\\F\a\025\201\207|Q\200\021!\200\2001!DM\313\226\253\025\035\241\001{\276\253\255\362\340D\203mdo\021\200\022\t\372\272\352\274b@" # Initial
+class Wave
+	attr_accessor :deltas, :host, :name
+	
+	def initialize(host, name)
+		@host = host
+		@name = name
+		
+		@deltas = [FakeDelta.new(self)]
+	end
+	
+	def conv_root_path
+		"wave://#{host}/w+#{name}/conv+root"
+	end
+	
+	def new_delta(author=nil)
+		delta = Delta.new self
+		delta.author = author
+		@deltas << delta
+		delta
+	end
+end
 
-data = "\n\357\001\nC\n\030\b\001\022\024\361\207{\331\357\370~\276\206\243\016$\207\234m\v!bH-\022\023danopia@danopia.net\032\022\n\020meep@danopia.net\022\247\001\n\200\001\203\370\231g\246Rt\276\355\372\003\324\321p\311\261\337\2510(fSH\005I1V\222\360\357gNMD\211\334\003\330VKf\242K\264\247\373\002\357\t\200,mm\234\350\037*F\001V\271$\236\375\343\2168\372\205\027G\017\362\344\275zL\372\271\253\320\2420\244\227\342#\355\263+\257\216\273\324\353\252\021\326\376>\235\327\325\257\374I\255\036\335\275-#\227|\246\002A\336\337\017%Q\aO~\004\t\001\"\004\250|\330;s\245gXH\351@E\262\340\222\217s\000/\314CW\263\177\\F\a\025\201\207|Q\200\021!\200\200\021!O\030w\275\236\377\207\353\350j0\342Hy\306\320\262\026$\202\321\200\022\n>J\252\274b@" # Second of the second packet
+wave = Wave.new('danopia.net', 'BHW1z9FOWKum')
 
-data = "\n\362\001\nF\n\030\b\001\022\024\242\220\231\340\315Z\252wF\247\245H\363\303\352\377\347\306\254;\022\023danopia@danopia.net\032\025\n\023echoey@acmewave.com\022\247\001\n\200\001&\026\001#\345\352\313\262\215\247\005\311K$\2027\bSP\231\303\275\357\235_CC\371\301\274\316\b/\345\350_\346\231\315e\237*iO^\233\307\205\252\336\220\354\362\251\376\325{\277aqq\332\253\n\031\271\333W\222\310\273r\277\354I}\347\303\346\030*$S\215\344b\226\342x\327\224\333\204\e`\337{(\345\211\215&0A;\376D\030\355|\016\253\233\311\250\024\006>\216\317\375\365YI\252\214\250\241\"\004\250|\330;s\245gXH\351@E\262\340\222\217s\000/\314CW\263\177\\F\a\025\201\207|Q\200\021!\200\200\021!J)\t\236\f\325\252\247tjzT\217<>\257\376|j\303\261\200\022\b\274o\277,b@"
+delta = wave.new_delta 'me@danopia.net'
+delta.operations << {2 => 'me@danopia.net'} # Add myself to the conv_root_path
+delta.propagate
+delta.hash
 
-p ProtoBuffer.encode({
-	0 => {
-		0 => 0,
-		1 => 'wave://danopia.net/w+BHW1z9FOWKum/conv+root'
-	},
-	1 => 'me@danopia.net',
-	2 => {
-		0 => 'me@danopia.net'
-	}
-})
-delta = "\n/\b\000\022+wave://danopia.net/w+BHW1z9FOWKum/conv+root\022\016me@danopia.net\032\020\n\016me@danopia.net"
-p delta
-signature = sign_delta(delta)
-p signature
+delta = wave.new_delta 'me@danopia.net'
+delta.operations << {2 => 'echoey@kshh.us'} # Add an echoey to the wave
+delta.propagate
+delta.hash
 
-data = "\n\377\001\nS#{delta}\022\247\001\n\200\001#{signature}\022 J\207\315\203\267:Vu\204\216\224\004[.\t(\3670\002\374\3045{7\365\304`qX\030w\305\030\001\022/\b\000\022+wave://danopia.net/w+BHW1z9FOWKum/conv+root\030\001 \364\302\274\237\307$"
+pp wave.deltas
 
-puts Base64.encode64(hash_delta('wave://danopia.net/w+BHW1z9FOWKum/conv+root', data))
-hash = ProtoBuffer.parse data
-#p hash
 exit
-
-#doc = Hpricot('<packet><iq type="get" id="513-92" from="component.danopia.net" to="wave.danopia.net"><query xmlns="http://jabber.org/protocol/disco#info"/></iq><iq type="get" id="513-92" from="component.danopia.net" to="wave.danopia.net"><query xmlns="http://jabber.org/protocol/disco#info"/></iq></packet>')
-
-#p doc.root.children.first.name
-#exit
 
 #sleep 5
 
