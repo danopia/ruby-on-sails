@@ -1,0 +1,33 @@
+<h2>Wave: <%=h @wave.name %> (from <%=h @wave.host %>)</h2>
+
+<p><em>Participants:</em> <%=h @wave.participants.join(', ') %></p>
+
+<% @wave.real_deltas.each do |delta| %>
+<hr/>
+
+<p><%=h delta.author %> commited <a name="r<%=h delta.version %>">r<%=h delta.version %></a>:</p>
+
+<% if delta.operations.first[0] -%>
+<p><em>Added <%=h delta.operations.first[0] %> to the wave</em></p>
+<% end -%>
+<% if delta.operations.first[1] -%>
+<p><em>Removed <%=h delta.operations.first[1] %> from the wave</em></p>
+<% end -%>
+<% if delta.operations.first[2] && delta.operations.first[2].is_a?(Array) -%>
+<blockquote><p><%=h delta.operations.first[2].first[2].first[1].first[0].last[1].first %></em></p></blockquote>
+<% elsif delta.operations.first[2] -%>
+<blockquote><p><%=h delta.operations.first[2][2][1][0].last[1] %></em></p></blockquote>
+<% end -%>
+
+<!--p><%=h delta.operations.first.inspect %></p-->
+
+<% end -%>
+
+<hr/>
+
+<%= form_tag wave_update_path(@wave.name) %>
+<%= text_field_tag "message" %>
+<br/><%= submit_tag "Add" %>
+</form>
+
+<p><%#=h @wave.digest %></p>

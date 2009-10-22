@@ -1,0 +1,23 @@
+<div class="fancy user">
+	<%=image_tag gravatar(@user.email, 200), :alt => "#{h @user.username}'s Gravatar" %>
+	<div class="label">Username</div><div class="value"><%=h @user.username %></div>
+<% if !empty? @user.age -%>
+	<div class="label">Age</div><div class="value"><%=h @user.age %></td></div>
+<% end -%>
+	<div class="label">Gender</div><div class="value"><%=h (@user.gender ? 'Female' : 'Male') %></td></div>
+<% if @user.show_email -%>
+	<div class="label">Email</div><div class="value"><%=h @user.email %></td></div>
+<% end; if !empty? @user.blurb -%>
+	<div class="label">Blurb</div><div class="value"><%=h @user.blurb %></td></div>
+<% end -%>
+	<div class="center"><%#= link_to 'Edit', edit_user_path(@user) %><%= link_to 'Back to User list', :action => 'index' %></div>
+</div>
+<div class="divline" style="clear: left;"></div>
+<h2><%=h @user.username %>'s Blog Posts</h2>
+<br/>
+<% first = true; @posts.each do |post|; if !first -%>
+<div class="divline" style="clear: left;"></div>
+<% end; first = false -%>
+<h2><%= link_to h(post.title), :controller => 'posts', :action => post.id %></h2>
+<div class="post"><%= post.content %></div>
+<% end %>

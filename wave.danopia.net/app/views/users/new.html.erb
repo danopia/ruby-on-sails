@@ -1,0 +1,36 @@
+<h2><%=icon_tag 'user_add' %> Register an Account</h2>
+
+<% form_for @user, :url => account_path do |f| %>
+  <%= f.error_messages %>
+  
+  <p>Note: Fields marked with <span style="color: red;">*</span> are required.</p>
+  
+  <p>
+    <span class="star">*</span> <label for="user_login">Username</label>
+    <br/><%= f.text_field "login", :size => 20 %>
+  </p>
+  
+  <p>
+    <label for="user_display_name">Public display name</label>
+    <br/><%= f.text_field "display_name", :size => 20 %>
+  </p>
+  
+  <p>
+    <span class="star">*</span> <label for="user_password">Password</label>
+    <br/><%= f.password_field "password", :size => 20 %>
+  </p>
+  
+  <p>
+    <span class="star">*</span> <label for="user_password_confirmation">Password (again)</label>
+    <br/><%= f.password_field "password_confirmation", :size => 20 %>
+  </p>
+  
+  <p>
+    <span class="star">*</span> <label for="user_email">E-mail address</label>
+    <br/><%= f.text_field "email", :size => 20 %>
+  </p>
+  
+  <p>
+    <%= f.submit "Register" %>
+  </p>
+<% end %>

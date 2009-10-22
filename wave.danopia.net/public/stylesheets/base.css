@@ -1,0 +1,141 @@
+body { background-color: #eee; color: #333; margin: 0 0 0 0; }
+
+body, p, ol, ul {
+  font-family: verdana, arial, helvetica, sans-serif;
+  font-size:   13px;
+  line-height: 18px;
+}
+
+#header {
+	width: 100%;
+}
+
+#footer {
+	width: 100%;
+	padding: 0 1em 1em 1em;
+}
+
+h3 {
+	background-color: #eee;
+	border: 1px solid #999;
+	padding: 0.2em 0.5em;
+}
+h3 img {
+	padding: 0 0.2em 0 0;
+}
+
+#content {
+	padding: 1em;
+	background-color: #fff;
+}
+
+.box {
+	margin: 1em;
+	padding: 0.2em 1em;
+	clear: both;
+	border: 1px solid #900;
+	background-color: #fcc;
+}
+.warning {
+	border-color: #990;
+	background-color: #ffc;
+}
+.notice {
+	border-color: #090;
+	background-color: #cfc;
+}
+
+.ajax {
+	padding-left: 50px;
+	border-left: 3px solid #99f;
+}
+
+img {
+	border-style: none;
+}
+
+pre {
+  background-color: #eee;
+  padding: 10px;
+  font-size: 11px;
+}
+
+a { color: #000; }
+a:visited { color: #666; }
+a:hover { color: #fff; background-color:#000; }
+
+.fieldWithErrors {
+  padding: 2px;
+  background-color: red;
+  display: table;
+}
+
+#errorExplanation {
+  width: 400px;
+  border: 2px solid red;
+  padding: 7px;
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+  background-color: #f0f0f0;
+}
+
+#errorExplanation h2 {
+  text-align: left;
+  font-weight: bold;
+  padding: 5px 5px 5px 15px;
+  font-size: 12px;
+  margin: -7px;
+  background-color: #c00;
+  color: #fff;
+}
+
+#errorExplanation p {
+  color: #333;
+  margin-bottom: 0;
+  padding: 5px;
+}
+
+#errorExplanation ul li {
+  font-size: 12px;
+  list-style: square;
+}
+
+
+h1 {
+	margin: 0.3em 1em;
+}
+
+#header ul
+{
+	padding-left: 0;
+	margin: 0 0 1em 0;
+	background-color: #036;
+	color: #fff;
+	float: left;
+	width: 100%;
+	font-family: arial, helvetica, sans-serif;
+}
+
+#header ul li {
+	display: inline;
+}
+#header ul li#first a {
+	margin-left: 2em;
+	border-left: 1px solid #fff;
+}
+
+#header ul li a
+{
+	padding: 0.2em 1em;
+	background-color: #036;
+	color: #fff;
+	text-decoration: none;
+	float: left;
+	border-right: 1px solid #fff;
+}
+
+#header ul li a:hover, #header ul li#active a
+{
+	background-color: #369;
+	color: #fff;
+}

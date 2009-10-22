@@ -1,0 +1,18 @@
+<h2><%= @address %>'s waves</h2>
+
+<%=link_to 'New wave', wave_path('new') %>
+
+<% @waves.each do |wave| -%>
+
+<% if wave.host == 'danopia.net' -%>
+<h3><%=link_to wave.name, wave_path(wave.name) %></h3>
+<% else -%>
+<h3><%=link_to wave.name, domain_wave_path(wave.host, wave.name) %></h3>
+<% end -%>
+
+<p><em>Participants:</em> <%=h wave.participants.join(', ') %></p>
+<p><em>Digest:</em> (not implemented)<%#=h wave.digest %></p>
+
+<p>Have <%=h wave.deltas.size %> updates</p>
+
+<% end -%>

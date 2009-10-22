@@ -1,0 +1,22 @@
+<div class="fancy">
+<% first = true; for users in @users; if !first -%>
+	<div class="divline"></div>
+<% end; first = false -%>
+	<div class="user">
+		<%=link_to image_tag(gravatar(users.email, 200), :alt => "#{h users.username}'s Gravatar"), users %>
+		<div class="label">Username</div><div class="value"><%=h users.username %></div>
+<% if !empty? users.age -%>
+		<div class="label">Age</div><div class="value"><%=h users.age %></td></div>
+<% end -%>
+		<div class="label">Gender</div><div class="value"><%=h (users.gender ? 'Female' : 'Male') %></td></div>
+<% if users.show_email -%>
+		<div class="label">Email</div><div class="value"><%=h users.email %></td></div>
+<% end; if !empty? users.blurb -%>
+		<div class="label">Blurb</div><div class="value"><%=h users.blurb %></td></div>
+<% end -%>
+<%#td><= link_to 'Show', users ></td>
+<td><= link_to 'Edit', edit_user_path(users) ></td>
+<td><= link_to 'Destroy', users, :confirm => 'Are you sure?', :method => :delete ></td%>
+	</div>
+<% end -%>
+</div>
