@@ -171,39 +171,6 @@ provider << wave
 
 #################
 
-#pp wave.deltas
-#pp Delta.parse('killerswan.com/w+l5PdmqP1fk7y/conv+root', decode64('CuMCCrYBChgIBRIUQMqHNhGIufPL+x6p4yduyHwjOqESFGtldmluQGtpbGxlcnN3YW4uY29tGoMBGoABCgRtYWluEngKAihRCiQaIgoEbGluZRIaCgJieRIUa2V2aW5Aa2lsbGVyc3dhbi5jb20KAiABCkgSRmkgZG9uJ3Qgc2VlIHRoZSBkaWZmZXJlbmNlIGJldHdlZW4gbWluZSBhbmQgeW91cnMsIGJ1dCBoZWxsLCB3aG8ga25vd3MSpwEKgAEd99hVpTJdkEO2GGOLBpPVw11V9PEuInlk7hAlrK9KdYziQ4n9K24Om2DQ17fufpIcgM+PUpwd3Ky2qMe7CrpsEEye9B/Gy9m7hqnqH31fBz1ZenkGYoGH+3lC3t/GPq9lnsrhhc78/QDYkR1lPrxGgQ1H1yc+Pl1guzMLdIEosxIgG8IInu6+ztJa1ZFlGwHvaVuLNDWTJX1s0tyYnJDpbaEYARIYCAUSFEDKhzYRiLnzy/seqeMnbsh8IzqhGAEgmJb7scck'))
-#exit
-
-#\n\231\001
-#	\n\030
-#		\b\004 # applied to version
-#		\022\024^\257\001l\231IKZ\352\223\346\274\206N\235]\246EWS # applied to hash
-#	\022\025 echoey@killerswan.com # author
-#	\032f # operation
-#		\032d # mutate doc
-#			\n\004 main # doc id
-#			\022\\ # doc operation
-#				\n\002 (\004 # retain item count = 4
-#				\n%\032# # element
-#					\n\004 line # type
-#					\022\e # attribute
-#						\n\002 by # key
-#						\022\025 echoey@killerswan.com # value
-#			\n\002 \001 # element end
-#			\n+
-#				\022) echoey@kshh.us was added to this wavelet. # charactors
-#\022\247\001
-#	\n\200\001 o}\211\237\314t\374\254\034\006\037\v\003\215\361\b\326K\343\254\343\t\304\234\243^\252\257\273\225\310\315q\372\212Y\360\2765\001\237\372\211\325\345@\263\031\005\354\e\\\341\301\021\216\346\351\321\022\333\211K\223\003\372\226\\J\202|\016\373\207R\272\215J\311\330\262\025\a\025\245\377-hg\v\035:\254F'\265\267\023[\240\204\276p\353\305\260\320\355\371@c# \271m`O]&\016L\032\232\344\357\206\205\246
-#	\022  \e\302\b\236\356\276\316\322Z\325\221e\e\001\357i[\21345\223%}l\322\334\230\234\220\351m\241
-#	\030\001
-
-#delta = Delta.parse('danopia.net/w+R0PIDtU751vE/conv+root', decode64('CpkBChgIBBIUXq8BbJlJS1rqk+a8hk6dXaZFV1MSFWVjaG9leUBraWxsZXJzd2FuLmNvbRpmGmQKBG1haW4SXAoCKAQKJRojCgRsaW5lEhsKAmJ5EhVlY2hvZXlAa2lsbGVyc3dhbi5jb20KAiABCisSKWVjaG9leUBrc2hoLnVzIHdhcyBhZGRlZCB0byB0aGlzIHdhdmVsZXQuEqcBCoABb32Jn8x0/KwcBh8LA43xCNZL46zjCcSco16qr7uVyM1x+opZ8L41AZ/6idXlQLMZBewbXOHBEY7m6dES24lLkwP6llxKgnwO+4dSuo1KydiyFQcVpf8taGcLHTqsRie1txNboIS+cOvFsNDt+UBjIyC5bWBPXSYOTBqa5O+GhaYSIBvCCJ7uvs7SWtWRZRsB72lbizQ1kyV9bNLcmJyQ6W2hGAE='))
-
-#wave = delta.wave
-
-#puts '<iq type="get" id="4605-148" from="' + 'wave.danopia.net' + '" to="' + 'asdf' + '"><pubsub xmlns="http://jabber.org/protocol/pubsub"><items node="wavelet"><delta-history xmlns="http://waveprotocol.org/protocol/0.2/waveserver" start-version="0" start-version-hash="' + encode64(wave.deltas.first.hash) + '" end-version="' + wave.deltas.last.version.to_s + '" end-version-hash="' + encode64(wave.deltas.last.hash) + '" wavelet-name="danopia.net!w+R0PIDtU751vE/conv+root"/></items></pubsub></iq>'
-
 puts "Connecting as #{provider.name}..."
 sock = TCPSocket.new 'localhost', 5275
 
