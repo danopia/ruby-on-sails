@@ -22,39 +22,6 @@ def decode64(data)
 	Base64.decode64(data)
 end
 
-class Provider
-	attr_accessor :certs, :cert_hash, :domain, :name, :waves
-	
-	def initialize(domain, subdomain='wave')
-		@certs = {}
-		@cert_hash = nil
-		@domain = domain
-		@name = "#{subdomain}.#{domain}"
-		@waves = {}
-		
-		@certs[domain] = open("#{domain}.cert").read.split("\n")[1..-2].join('')
-	end
-	
-	def cert_hash
-		return @cert_hash if @cert_hash
-		@cert_hash = decode64(@certs[@domain])
-		@cert_hash = Digest::SHA2.digest "0\202\003\254#{@cert_hash}"
-	end
-	
-	def [](name)
-		return @waves[name] if @waves.has_key?(name)
-		
-		# allow fallback to not specifing a domain
-		waves = @waves.values.select{|wave|wave.name == name}
-		return nil if waves.empty?
-		waves.first
-	end
-	
-	def <<(wave)
-		@waves[wave.path] = wave
-	end
-end
-
 class ProtoBuffer
 	def self.parse(data)
 		data = StringIO.new(data)
@@ -169,10 +136,9 @@ delta.operations << AddUserOp.new("test@danopia.net")
 wave << delta
 
 delta = Delta.new(wave, "me@danopia.net")
-delta.operations << MutateOp.new('main', "This is a test.")
-#{2=>{2=>{0=>"main",1=> {0=>["(\004",
-#	{2=>{0=>"line", 1=>{0=>"by", 1=>author}}}," \001",
-#	{1=>text}]}}}}
+delta.operations << MutateOp.new('main', [["(\004",
+			{2=>{0=>"line", 1=>{0=>"by", 1=>'me@danopia.net'}}}," \001",
+			{1=>"This is a test."}]])
 wave << delta
 
 delta = Delta.new(wave, "me@danopia.net")
@@ -298,7 +264,7 @@ sock.send_xml 'iq', 'get', 'killerswan.com', '<query xmlns="http://jabber.org/pr
 puts 'Setting up keepalive thread'
 Thread.new do
 	while sleep 60
-		sock.send_xml ' '
+		sock.send_raw ' '
 	end
 end
 

@@ -7,16 +7,12 @@
 
 <p><%=h delta.author %> commited <a name="r<%=h delta.version %>">r<%=h delta.version %></a>:</p>
 
-<% if delta.operations.first[0] -%>
-<p><em>Added <%=h delta.operations.first[0] %> to the wave</em></p>
+<% delta.operations.each do |operation| -%>
+<% if operation.is_a?(AddUserOp) || operation.is_a?(RemoveUserOp) -%>
+<p><em><%=h operation.to_s %></em></p>
+<% elsif operation.is_a? MutateOp -%>
+<blockquote><p><%=h operation.operations.first.last[1] %></em></p></blockquote>
 <% end -%>
-<% if delta.operations.first[1] -%>
-<p><em>Removed <%=h delta.operations.first[1] %> from the wave</em></p>
-<% end -%>
-<% if delta.operations.first[2] && delta.operations.first[2].is_a?(Array) -%>
-<blockquote><p><%=h delta.operations.first[2].first[2].first[1].first[0].last[1].first %></em></p></blockquote>
-<% elsif delta.operations.first[2] -%>
-<blockquote><p><%=h delta.operations.first[2][2][1][0].last[1] %></em></p></blockquote>
 <% end -%>
 
 <!--p><%=h delta.operations.first.inspect %></p-->

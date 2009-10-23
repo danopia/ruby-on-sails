@@ -25,7 +25,7 @@ class SailsRemote
 		@drb.stop_service if @drb
 	end
 	
-	def wave_list
+	def waves
 		@provider.waves
 	end
 	
@@ -38,7 +38,7 @@ class SailsRemote
 	
 	def add_delta(wave, delta)
 		if wave.is_a? Wave
-			wave << delta unless wave.deltas.include?(delta)
+			wave << delta# unless wave.deltas.include?(delta)
 			wave = wave.name
 		end
 		self[wave] << delta
@@ -51,6 +51,40 @@ class SailsRemote
 			chars << @@letters[rand * @@letters.size]
 		end
 		chars
+	end
+end
+
+
+class Provider
+	attr_accessor :certs, :cert_hash, :domain, :name, :waves
+	
+	def initialize(domain, subdomain='wave')
+		@certs = {}
+		@cert_hash = nil
+		@domain = domain
+		@name = "#{subdomain}.#{domain}"
+		@waves = {}
+		
+		@certs[domain] = open("#{domain}.cert").read.split("\n")[1..-2].join('')
+	end
+	
+	def cert_hash
+		return @cert_hash if @cert_hash
+		@cert_hash = decode64(@certs[@domain])
+		@cert_hash = Digest::SHA2.digest "0\202\003\254#{@cert_hash}"
+	end
+	
+	def [](name)
+		return @waves[name] if @waves.has_key?(name)
+		
+		# allow fallback to not specifing a domain
+		waves = @waves.values.select{|wave|wave.name == name}
+		return nil if waves.empty?
+		waves.first
+	end
+	
+	def <<(wave)
+		@waves[wave.path] = wave
 	end
 end
 
@@ -95,7 +129,7 @@ class RemoveUserOp
 	end
 	
 	def to_s
-		"Added #{@who.join(', ')} to the wave"
+		"Removed #{@who.join(', ')} from the wave"
 	end
 end
 
@@ -113,7 +147,9 @@ class MutateOp
 		#{2=>{2=>{0=>"main",1=> {0=>["(\004",
 		#	{2=>{0=>"line", 1=>{0=>"by", 1=>author}}}," \001",
 		#	{1=>text}]}}}}
-		{2 => operations}
+		{2 =>
+			{0 => @document_id,
+			 1 => {0 => operations}}}
 	end
 	
 	def to_s
@@ -244,6 +280,23 @@ class Wave
 		self << FakeDelta.new(self)
 	end
 	
+	def real_deltas
+		@deltas.values.select{|delta| delta.is_a? Delta}.sort{|a, b| b.version <=> a.version}
+	end
+	
+	def participants
+		participants = []
+		
+		real_deltas.reverse.each do |delta|
+			delta.operations.each do |op|
+				participants += op.who if op.is_a? AddUserOp
+				participants -= op.who if op.is_a? RemoveUserOp
+			end
+		end
+		
+		participants
+	end
+	
 	def path
 		"#{@host}/w+#{@name}"
 	end
@@ -261,9 +314,9 @@ class Wave
 	end
 	
 	def newest_version
-		@deltas.keys.last
+		@deltas.keys.sort.last
 	end
 	def newest
-		@deltas[@deltas.keys.last]
+		@deltas[@deltas.keys.sort.last]
 	end
 end

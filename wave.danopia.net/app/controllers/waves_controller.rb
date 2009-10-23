@@ -4,14 +4,14 @@ class WavesController < ApplicationController
   def index
 		@address = "#{current_user.login}@danopia.net"
 		
-		remote = SailsRemote.connect ':9000'
-		@waves = remote.wave_list
+		remote = SailsRemote.connect
+		@waves = remote.waves
   end
 
   def show
 		@address = "#{current_user.login}@danopia.net"
 		
-		remote = SailsRemote.connect ':9000'
+		remote = SailsRemote.connect
 		
 		if params[:id] == 'new'
 			@wave = Wave.new('danopia.net', random_name)
@@ -23,13 +23,10 @@ class WavesController < ApplicationController
 		@wave = remote[params[:id]]
 		
 		unless @wave.participants.include? @address
-			delta = @wave.new_delta @address
+			delta = Delta.new @wave, @address
 			delta.operations << AddUserOp.new(@address)
+			delta.operations << MutateOp.new('main', [create_fedone_line(@address, "Hey there, this is #{@address}, and I'm using Ruby on Sails!")])
     	remote.add_delta @wave, delta
-			
-			#delta = @wave.new_delta @address
-			#delta.operations << create_text_mutate(@address, "Hey there, this is #{@address}, and I'm using Ruby on Sails!")
-    	#server.add_delta @wave.name, delta
     end
     
   end
@@ -37,23 +34,26 @@ class WavesController < ApplicationController
   def update
 		@address = "#{current_user.login}@danopia.net"
 		
-		remote = SailsRemote.connect ':9000'
+		remote = SailsRemote.connect
 		@wave = remote[params[:id]]
 		
 		if @wave.participants.include? @address
-			delta = @wave.new_delta @address
-			delta.operations << MutateOp.new('main', "<line by='#{@address}'/>" + params[:message])
+			delta = Delta.new @wave, @address
+			delta.operations << MutateOp.new('main', [create_fedone_line(@address, params[:message])])
     	remote.add_delta @wave, delta
+    	
+    	redirect_to wave_path(@wave.name) + '#r' + delta.version.to_s
+    else
+    	render :text => 'fail.'
     end
-    
-    redirect_to wave_path(@wave.name) + '#r' + delta.version.to_s
   end
 
 	protected
 	
-	def create_text_mutate(author, text)
-		{2=>{2=>{0=>"main",1=> {0=>["(\004",
+	def create_fedone_line(author, text)
+		#{2=>{2=>{0=>"main",1=> {0=>
+		["(\004",
 			{2=>{0=>"line", 1=>{0=>"by", 1=>author}}}," \001",
-			{1=>text}]}}}}
+			{1=>text}]#}}}}
 	end	
 end
