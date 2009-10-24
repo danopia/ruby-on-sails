@@ -1,23 +1,21 @@
 #!/usr/bin/env ruby
 
-require 'core.rb'
 require 'gserver'
+require 'wave.danopia.net/lib/sails_remote'
 
-#
-# A server that connects people to wave.
-#
-class WaveServer < GServer
+class SailsTelnetServer < GServer
 	def initialize(port=23, host='localhost', maxConnections = 20, *args)
 		super(port, host, maxConnections, *args)
+		@remote = SailsRemote.connect
 	end
 	
 	def serve(io)
 		name = nil
-		sock = nil
 		
 		while true
-			line = sock ? io.gets.chomp : '/connect danopia'
+			line = name ? io.gets.chomp : '/connect test'
 			params = line.split ' '
+			next if params.empty?
 			
 			case params.first.downcase
 				when '/quit'
@@ -25,124 +23,33 @@ class WaveServer < GServer
 					return
 				
 				when '/connect'
-					address = "#{params[1]}@danopia.net"
+					name = params[1]
+					address = "#{name}@#{remote.provider.domain}"
 					io.puts "Connecting as #{address}...."
 					
-					sock = WaveSocket.new(address, 'localhost', 9876)
-					sock.request_wave_list
-					
-					Thread.new do
-						begin
-							until sock.sock.closed?
-								packet = sock.recv
-								log "Got packet type #{packet.type}"
-								
-								case packet.type
-									when 'waveserver.ProtocolWaveletUpdate'
-										address = packet[0].first
-										
-										domain = nil
-										id = nil
-										
-										domain = $1 if address =~ /^wave:\/\/([^\/]+)\//
-										id = $1 if address =~ /(w\+[a-zA-Z0-9\-]+)/
-										
-										wave = sock.find_wave id
-										unless wave
-											log "Creating a new wave entry for #{domain}!#{id}"
-											wave = Wave.new id, domain
-											sock.waves << wave
-											
-											redraw(io, sock) if address.include? '!indexwave'
-										end
-										
-										if address.include? '!indexwave'
-											log "Requesting more details on #{wave.id}"
-											sock.request_wave wave
-										else
-										
-											log "Got info on wave: #{id}"
-											
-											if wave.revisions.any?
-												log "Overwriting existing entry"
-												wave.participants.clear
-												wave.revisions.clear
-												wave.messages.clear
-											end
-											
-											packet[1].each do |update|
-												rev = Revision.new wave, update[0].first, update[1].first
-												
-												update = update[2].first
-												rev.added_participants = update[0] if update[0]
-												rev.removed_participants = update[1] if update[1]
-												
-												p update
-												if update[2]
-													# {2 => [{
-													# 	0 => ["main"],
-													# 	1 => [{
-													# 		0 => [{
-													# 			2 => [{
-													# 				0 => ["line"],
-													# 				1 => [{
-													# 					0 => ["by"],
-													# 					1 => ["test@danopia.net"]
-													# 				}]
-													# 			}]},
-													# 			" \001",
-													# 			{
-													# 				1 => ["hi"]
-													# 			}
-													# 		]}
-													# 	]}
-													# ]}
-
-													update = update[2].first[1].first[0]
-													message = update.select{|thing|thing.is_a? Hash}.last[1].first
-													rev.deltas << message
-													wave.messages << [rev.author, message]
-												end
-												
-												wave.revisions << rev
-											end
-											
-											redraw io, sock
-										end
-										
-									else
-										log "Unknown packet #{packet.type}"
-								end
-								
-							end
-						rescue => error
-							io.puts 'Socket error'
-							p error
-						end
-					end
-					
+					redraw io
 			end
 			
 		end
 	end
 	
-	def redraw(io, sock)
+	def redraw(io)
 		io.print `clear`
-		io.puts 'Waves:'
-		sock.waves.each do |wave|
-			io.puts ' ---+---------------------------------------------------'
-			
-			if wave.messages.any?
-				io.puts "  #{sock.waves.index wave} |\t#{wave.id}\t<#{wave.messages.first[0]}> #{wave.messages.first[1]}"
-				(wave.messages.size - 1).times do |index|
-					io.puts "    |\t\t\t<#{wave.messages[index+1][0]}> #{wave.messages[index+1][1]}"
+		if @remote.waves.any?
+			io.puts 'Waves:'
+			i = 0
+			@remote.waves.each_value do |wave|
+				io.puts ' ---+---------------------------------------------------'
+				io.puts "  #{i} |\t#{wave.name}@#{wave.host}"#\t<#{wave[0].author}> #{wave[0].operations.first}"
+				wave.real_deltas.each do |delta|
+					io.puts "    |\t\t\t<#{delta.author}> #{delta.operations.first.to_s}"
 				end
-			else
-				io.puts "  #{sock.waves.index wave} |\t#{wave.id}\t*waiting*"
+				i += 1
 			end
+			io.puts ' ---+---------------------------------------------------'
+		else
+			io.puts 'No waves exist.'
 		end
-		
-		io.puts ' ---+---------------------------------------------------' if sock.waves.any?
 	end
 	
 	def error(detail)
@@ -152,7 +59,7 @@ class WaveServer < GServer
 end
 
 # Run the server with logging enabled (it's a separate thread).
-server = WaveServer.new 1025, '0.0.0.0'
+server = SailsTelnetServer.new 1025, '0.0.0.0'
 server.audit = true                  # Turn logging on.
 server.debug = true                  # Turn debugging on.
 server.start
