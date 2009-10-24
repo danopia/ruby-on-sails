@@ -11,7 +11,7 @@
 <% if operation.is_a?(AddUserOp) || operation.is_a?(RemoveUserOp) -%>
 <p><em><%=h operation.to_s %></em></p>
 <% elsif operation.is_a? MutateOp -%>
-<blockquote><p><%=h operation.operations.first.last[1] %></em></p></blockquote>
+<blockquote><p><%=h operation.to_s %></em></p></blockquote>
 <% end -%>
 <% end -%>
 

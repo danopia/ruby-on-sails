@@ -143,6 +143,12 @@ class MutateOp
 		@operations = operations
 	end
 	
+	def self.parse(hashes)
+		doc = hashes[0].first
+		operations = hashes[1].first[0]
+		MutateOp.new(doc, operations)
+	end
+	
 	def to_hash
 		#{2=>{2=>{0=>"main",1=> {0=>["(\004",
 		#	{2=>{0=>"line", 1=>{0=>"by", 1=>author}}}," \001",
@@ -153,7 +159,7 @@ class MutateOp
 	end
 	
 	def to_s
-		operations.inspect
+		operations.last[1]
 	end
 end
 
@@ -176,7 +182,7 @@ class Delta
 		
 		wave = provider[wave_name]
 		unless wave
-			wave = Wave.new provider, wave_domain, wave_name
+			wave = Wave.new provider, wave_name, wave_domain
 			provider << wave
 		end
 		
@@ -196,7 +202,18 @@ class Delta
 		
 		delta = Delta.new(wave, data[0].first[1].first)
 		delta.version = version
-		delta.operations = data[0].first[2]
+		data[0].first[2].first.each_pair do |type, ops|
+			ops.each do |args|
+				case type
+					when 0
+						delta.operations << AddUserOp.new(args)
+					when 1
+						delta.operations << AddUserOp.new(args)
+					when 2
+						delta.operations << MutateOp.parse(args)
+				end
+			end
+		end
 		wave << delta
 		
 		#{0=>

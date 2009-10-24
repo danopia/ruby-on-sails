@@ -5,6 +5,7 @@ ActionController::Routing::Routes.draw do |map|
 	map.waves 'waves', :controller => 'waves', :action => 'index'
 	map.wave 'waves/:id', :controller => 'waves', :action => 'show'
 	map.wave_update 'waves/:id/update', :controller => 'waves', :action => 'update'
+	map.domain_wave 'waves/:id/:domain', :controller => 'waves', :action => 'show'
   
   map.login 'login', :controller => 'user_sessions', :action => 'new'
   map.logout 'logout', :controller => 'user_sessions', :action => 'destroy'

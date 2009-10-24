@@ -4,10 +4,10 @@
 
 <% @waves.each_value do |wave| -%>
 
-<% if wave.host == 'danopia.net' -%>
+<% if wave.host == 'danopia.net' || true -%>
 <h3><%=link_to wave.name, wave_path(wave.name) %></h3>
 <% else -%>
-<h3><%=link_to wave.name, domain_wave_path(wave.host, wave.name) %></h3>
+<h3><%=link_to wave.name, domain_wave_path(wave.name, wave.host) %></h3>
 <% end -%>
 
 <p><em>Participants:</em> <%=h wave.participants.join(', ') %></p>
