@@ -10,8 +10,9 @@ require 'base64'
 require 'pp'
 require 'openssl'
 require 'drb'
+require 'yaml'
 
-require 'wave.danopia.net/lib/sails_remote.rb'
+require 'wave.danopia.net/lib/sails_remote'
 
 sleep 2
 
@@ -118,7 +119,8 @@ class ProtoBuffer
 	end
 end
 
-provider = Provider.new 'danopia.net'
+config = YAML.load(File.open('sails.conf'))
+provider = Provider.new config['domain-name'], config['service-name'] || 'wave'
 
 #pp Delta.parse(provider, 'danopia.net/w+R0PIDtU751vE/conv+root', decode64('CpkBChgIBBIUXq8BbJlJS1rqk+a8hk6dXaZFV1MSFWVjaG9leUBraWxsZXJzd2FuLmNvbRpmGmQKBG1haW4SXAoCKAQKJRojCgRsaW5lEhsKAmJ5EhVlY2hvZXlAa2lsbGVyc3dhbi5jb20KAiABCisSKW1lQGRhbm9waWEubmV0IHdhcyBhZGRlZCB0byB0aGlzIHdhdmVsZXQuEqcBCoABaC9kcKxqj+QpKRrBJTXHSI+uVc4dhCNJfPSXhsm+gxVeJEr1STurX7WW6DWFAk5MXzdGNVqgLgY8mdf1OYnzl+M+yfDVP0O1U033jyMp+f1z8gaHM+8eFnp701ergWiseUmSXCgwAgpIefDWTnJM6RMLd4LbPHh4wV2j7zzxA5MSIBvCCJ7uvs7SWtWRZRsB72lbizQ1kyV9bNLcmJyQ6W2hGAE='))
 #exit
@@ -171,8 +173,8 @@ provider << wave
 
 #################
 
-puts "Connecting as #{provider.name}..."
-sock = TCPSocket.new 'localhost', 5275
+puts "Connecting to #{config['xmpp-connect-host']}:#{config['xmpp-connect-port']} as #{provider.name}..."
+sock = TCPSocket.new config['xmpp-connect-host'] || 'localhost', config['xmpp-connect-port'].to_i || 5275
 
 def sock.provider=(provider)
 	@provider = provider
@@ -211,22 +213,9 @@ unless id
 	exit
 end
 
-key = Digest::SHA1.hexdigest(id + 'yaywave')
-
-puts "Got stream ID #{id}, using #{key} to handshake"
+key = Digest::SHA1.hexdigest(id + config['xmpp-password'])
 
 sock.send_raw "<handshake>#{key}</handshake>"
-
-message = sock.recv 1024
-puts "Recieved: \e[33m#{message}\e[0m"
-
-if message != '<handshake></handshake>'
-	puts 'AUTH ERROR!!!'
-	exit
-end
-
-puts 'Sending ping to killerswan.com'
-sock.send_xml 'iq', 'get', 'killerswan.com', '<query xmlns="http://jabber.org/protocol/disco#items"/>'
 
 puts 'Setting up keepalive thread'
 Thread.new do
@@ -246,6 +235,11 @@ until sock.closed?
 	if !message || message.empty?
 		puts 'Connection closed.'
 		exit
+	
+	elsif message.include? '</stream:stream>'
+		puts "Server closed the XMPP component connection."
+		remote.stop_service
+		exit
 	end
 	
 	puts "Recieved: \e[33m#{message}\e[0m"
@@ -253,6 +247,16 @@ until sock.closed?
 	
 	doc.root.children.each do |packet|
 		name = packet.name
+		
+		if name == 'handshake'
+			puts "Connected to XMPP."
+			if config['ping']			
+				puts "Sending ping to #{config['ping']}"
+				sock.send_xml 'iq', 'get', config['ping'], '<query xmlns="http://jabber.org/protocol/disco#items"/>'
+			end
+			next
+		end
+		
 		type = packet['type']
 		id = packet['id']
 		from = packet['from']
@@ -262,7 +266,7 @@ until sock.closed?
 		
 			when [:iq, :get]
 				if (packet/'query').any?
-					sock.send_xml 'iq', id, from, '<query xmlns="http://jabber.org/protocol/disco#info"><identity category="collaboration" type="google-wave" name="Google Prototype Wave Server - FedOne"/><feature var="http://waveprotocol.org/protocol/0.2/waveserver"/></query>'
+					sock.send_xml 'iq', id, from, '<query xmlns="http://jabber.org/protocol/disco#info"><identity category="collaboration" type="google-wave" name="' + config['identity'] + '"/><feature var="http://waveprotocol.org/protocol/0.2/waveserver"/></query>'
 					
 				# <pubsub xmlns="http://jabber.org/protocol/pubsub"><items node="wavelet"><delta-history xmlns="http://waveprotocol.org/protocol/0.2/waveserver" start-version="0" start-version-hash="d2F2ZTovL2Rhbm9waWEubmV0L3crRWx4cG04bWpCN0tJL2NvbnYrcm9vdA==" end-version="3" end-version-hash="RNy5arFR2hAXu+q63y4ESDbWRvE=" wavelet-name="danopia.net/w+Elxpm8mjB7KI/conv+root"/></items></pubsub>
 				elsif (packet/'pubsub').any?
@@ -305,7 +309,7 @@ until sock.closed?
 					
 					haswave = false
 					(packet/'query/item').each do |item|
-						puts "\t#{item['name']} (at #{item['jid']})"
+						puts "\t#{item['name']}\t(at #{item['jid']})"
 						haswave = item['jid'] if item['name'].include? 'Wave Server'
 					end
 					

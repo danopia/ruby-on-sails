@@ -18,5 +18,7 @@ you if you follow Google's instructions to create certs:
 
 <http://code.google.com/p/wave-protocol/wiki/Certificates>
 
-Finally, you'll have to config the XMPP component. YOu need to edit the .rb to
-do this, until I add YAML config file reading.
+Finally, you'll have to config the XMPP component. Ruby on Sails will try
+reading sails.conf, a YAML file, for configuration settings. You'll find XMPP
+name, host, port, password, and service name there, plus a few other worthless
+things.
