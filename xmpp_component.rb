@@ -196,6 +196,7 @@ def sock.send_xml(name, type, to, contents, id=nil)
 	end
 	
 	ids[id] = send_raw("<#{name} type=\"#{type}\" id=\"#{id}\" to=\"#{to}\" from=\"#{@provider.name}\">#{contents}</#{name}>")
+	id
 end
 
 sock.provider = provider
@@ -221,6 +222,7 @@ puts 'Setting up keepalive thread'
 Thread.new do
 	while sleep 60
 		sock.send_raw ' '
+		puts 'Sent a space'
 	end
 end
 
@@ -230,8 +232,17 @@ puts "DRb server running at #{remote.uri}"
 
 puts 'Entering program loop'
 
+ids = {} # used for history requests
+ready = false
 until sock.closed?
-	message = sock.recv 10000
+	if ready
+		message = '<message from="wave.fedone.ferrum-et-magica.de" to="wave.danopia.net" type="normal" id="7837-16"><request xmlns="urn:xmpp:receipts"/><event xmlns="http://jabber.org/protocol/pubsub#event"><items><item><wavelet-update xmlns="http://waveprotocol.org/protocol/0.2/waveserver" wavelet-name="fedone.ferrum-et-magica.de/w+P6MKjCO7yjGk/conv+root"><applied-delta>Cv4BClIKGAgBEhSu+JngKoP3Rd/UWzVbkkYT1Cg3OxIfbXVya0BmZWRvbmUuZmVycnVtLWV0LW1hZ2ljYS5kZRoVChNkYW5vcGlhQGRhbm9waWEubmV0EqcBCoABDdZsGqODVWvnv++wVzBOHe0GxWwk+3Uw6wLKBATp6z7zhlSniyeQukZoXxIwWWyZy9nOmJnfi/PKym31VHMZWsZJ9U8pptRiANjxG6K4BP1HjcK0QSXgX7s1jOyh1NeCr++pnv+y6qw97ojifNP2Yq5ZPbrUL8rgblyp/L4cl/gSIJ+nDylQQHNfFOiRVLIoyGbJizNr0JcFtkSZHOyZFRsKGAESGAgBEhSu+JngKoP3Rd/UWzVbkkYT1Cg3OxgBIIeqtrbIJA==</applied-delta></wavelet-update></item></items></event></message>'
+		message = '<message from="wave.fedone.ferrum-et-magica.de" to="wave.danopia.net" type="normal" id="8390-18"><request xmlns="urn:xmpp:receipts"/><event xmlns="http://jabber.org/protocol/pubsub#event"><items><item><wavelet-update xmlns="http://waveprotocol.org/protocol/0.2/waveserver" wavelet-name="fedone.ferrum-et-magica.de/w+P6MKjCO7yjGk/conv+root"><applied-delta>CrECCoQBChgIAhIUPWoUvFBWI4FDvkx8AW1uoEvykwYSH211cmtAZmVkb25lLmZlcnJ1bS1ldC1tYWdpY2EuZGUaRxpFCgRtYWluEj0KLxotCgRsaW5lEiUKAmJ5Eh9tdXJrQGZlZG9uZS5mZXJydW0tZXQtbWFnaWNhLmRlCgIgAQoGEgRoZWxwEqcBCoABAufyO9HjYzlmz+LoUiF6OdvTbREceK0zzZ49yUfiOKhFMJLsQKmNMPzAS54Laoh+QoA0YI5uTGyOQV4dXRgs0qaandWuU3WtEepgl7XX0ZPCTqTiBlObWtUa2+eljLK/KoSMaVQ7pNHfW1RI+P9ww7eOVzbJy2LSbq5X/jwCB2oSIJ+nDylQQHNfFOiRVLIoyGbJizNr0JcFtkSZHOyZFRsKGAESGAgCEhQ9ahS8UFYjgUO+THwBbW6gS/KTBhgBIJ+E+7bIJA==</applied-delta></wavelet-update></item></items></event></message>'
+		ready = false
+	else
+		message = sock.recv 10000
+	end
+	
 	if !message || message.empty?
 		puts 'Connection closed.'
 		exit
@@ -267,6 +278,7 @@ until sock.closed?
 			when [:iq, :get]
 				if (packet/'query').any?
 					sock.send_xml 'iq', id, from, '<query xmlns="http://jabber.org/protocol/disco#info"><identity category="collaboration" type="google-wave" name="' + config['identity'] + '"/><feature var="http://waveprotocol.org/protocol/0.2/waveserver"/></query>'
+					ready = true if from.include? 'danopia.net'
 					
 				# <pubsub xmlns="http://jabber.org/protocol/pubsub"><items node="wavelet"><delta-history xmlns="http://waveprotocol.org/protocol/0.2/waveserver" start-version="0" start-version-hash="d2F2ZTovL2Rhbm9waWEubmV0L3crRWx4cG04bWpCN0tJL2NvbnYrcm9vdA==" end-version="3" end-version-hash="RNy5arFR2hAXu+q63y4ESDbWRvE=" wavelet-name="danopia.net/w+Elxpm8mjB7KI/conv+root"/></items></pubsub>
 				elsif (packet/'pubsub').any?
@@ -336,6 +348,16 @@ until sock.closed?
 					wave = provider['BHW1z9FOWKua']
 					
 					sock.send_xml 'message', 'normal', from, "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{wave.conv_root_path.sub('/', '!')}\"><applied-delta><![CDATA[#{encode64(wave.newest.to_s)}]]></applied-delta></wavelet-update></item></items></event>"
+					
+				elsif (packet/'pubsub/items/item/applied-delta').any?
+					wave = ids[id]
+					ids.delete id
+					puts "Got history for #{wave.name}"
+					
+					(packet/'pubsub/items/item/applied-delta').each do |update|
+						delta = Delta.parse(provider, wave.conv_root_path, decode64(update.inner_text))
+						puts "Got a delta, version #{delta.version}"
+					end
 				end
 			
 			when [:message, :normal]
@@ -353,9 +375,16 @@ until sock.closed?
 					end
 					
 				elsif subtype == 'request'
-					(packet/'request/event/items/item/wavelet-update').each do |update|
-						delta = Delta.parse(update['wavelet-name'], update.inner_text)
+					(packet/'event/items/item/wavelet-update').each do |update|
+						delta = Delta.parse(provider, update['wavelet-name'], decode64(update.inner_text))
 						puts "Got a delta, version #{delta.version}"
+						
+						wave = delta.wave
+						if wave.real_deltas.size != wave.deltas.size - 1
+							puts "Requesting more deltas"
+							id = sock.send_xml 'iq', 'get', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"0\" start-version-hash=\"#{encode64(wave[0].hash)}\" end-version=\"#{wave.newest_version}\" end-version-hash=\"#{encode64(wave.newest.hash)}\" wavelet-name=\"#{wave.conv_root_path}\"/></items></pubsub>"
+							ids[id] = wave
+						end
 					end
 					
 				end
