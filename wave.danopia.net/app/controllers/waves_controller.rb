@@ -6,6 +6,7 @@ class WavesController < ApplicationController
 		
 		remote = SailsRemote.connect
 		@waves = remote.waves
+    #DRb.start_service
   end
 
   def show
@@ -25,7 +26,7 @@ class WavesController < ApplicationController
 		unless @wave.participants.include? @address
 			delta = Delta.new @wave, @address
 			delta.operations << AddUserOp.new(@address)
-			delta.operations << MutateOp.new('main', [create_fedone_line(@address, "Hey there, this is #{@address}, and I'm using Ruby on Sails!")])
+			delta.operations << MutateOp.new('main', create_fedone_line(@address, "Hey there, this is #{@address}, and I'm using Ruby on Sails!"))
     	remote.add_delta @wave, delta
     end
     
@@ -39,7 +40,7 @@ class WavesController < ApplicationController
 		
 		if @wave.participants.include? @address
 			delta = Delta.new @wave, @address
-			delta.operations << MutateOp.new('main', [create_fedone_line(@address, params[:message])])
+			delta.operations << MutateOp.new('main', create_fedone_line(@address, params[:message]))
     	remote.add_delta @wave, delta
     	
     	redirect_to wave_path(@wave.name) + '#r' + delta.version.to_s
@@ -52,7 +53,7 @@ class WavesController < ApplicationController
 	
 	def create_fedone_line(author, text)
 		#{2=>{2=>{0=>"main",1=> {0=>
-		["(\004",
+		[#"(\004",
 			{2=>{0=>"line", 1=>{0=>"by", 1=>author}}}," \001",
 			{1=>text}]#}}}}
 	end	

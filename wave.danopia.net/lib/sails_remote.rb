@@ -4,12 +4,12 @@ require 'drb'
 class SailsRemote
 	attr_accessor :drb, :provider
 	
-	def self.serve(provider, host=':9000')
+	def self.serve(provider, host=':9001')
 		remote = SailsRemote.new(provider)
 		remote.drb = DRb.start_service("druby://#{host}", remote)
 		remote
 	end
-	def self.connect(host=':9000')
+	def self.connect(host=':9001')
 		DRbObject.new nil, "druby://#{host}"
 	end
 	
@@ -42,6 +42,7 @@ class SailsRemote
 			wave = wave.name
 		end
 		self[wave] << delta
+		delta.propagate
 	end
 	
 	def random_name(length=12)
@@ -56,7 +57,7 @@ end
 
 
 class Provider
-	attr_accessor :certs, :cert_hash, :domain, :name, :waves
+	attr_accessor :certs, :cert_hash, :domain, :name, :waves, :sock
 	
 	def initialize(domain, subdomain='wave')
 		@certs = {}
@@ -64,6 +65,7 @@ class Provider
 		@domain = domain
 		@name = "#{subdomain}.#{domain}"
 		@waves = {}
+		@sock = nil
 		
 		@certs[domain] = open("#{domain}.cert").read.split("\n")[1..-2].join('')
 	end
@@ -165,6 +167,7 @@ end
 
 class Delta
 	attr_accessor :wave, :version, :author, :operations, :time
+	attr_reader :frozen
 	
 	def initialize(wave, author=nil)
 		@wave = wave
@@ -172,6 +175,7 @@ class Delta
 		@version = wave.newest_version + 1
 		@operations = []
 		@time = Time.now
+		@frozen = false
 	end
 	
 	def self.parse provider, wavelet, data
@@ -188,7 +192,7 @@ class Delta
 		end
 		
 		data = data[0].first unless data.size < 4 # remove extra stuff if it's an applied delta
-		pp data
+		#pp data
 		version = data[0].first[0].first[0].first + 1
 		applied_to = wave[version - 1]
 		
@@ -215,47 +219,33 @@ class Delta
 				end
 			end
 		end
-		wave << delta
 		
-		#{0=>
-			#[{0=>
-				 #[{0=>
-						#[{0=>[1],
-							#1=>["\340\003\023yt\3001\346\vZ\212\220\a\222_n\371\024= "]}],
-					 #1=>["kevin@killerswan.com"],
-					 #2=>[{0=>["danopia@danopia.net"]}]}],
-				#1=>
-				 #[{0=>
-						#["Q\206\335\343\215\216D\330u'\020\331\327\325.ex\347y5\023\227\236\r\034\222\202\273\000E\263<\340<\357\2643\266\347y\206\235\256\311\234\026\205{\367\206\327\333 f\305\343M/B\315\215e\216\350G\177P'\333\335\r\360\337\332\354\354\n\026\206\037\335\306\023\303\037N3\205e\210\367_\240\311!U\252]\307\333>\235\207\242\267\202\2532\022\"\260H\227MF\314\005X\377Pp\226\177d\347\035\027}"],
-					 #1=>
-						#["\e\302\b\236\356\276\316\322Z\325\221e\e\001\357i[\21345\223%}l\322\334\230\234\220\351m\241"],
-					 #2=>[1]}]}],
-		 #1=>[{0=>[1], 1=>["\340\003\023yt\3001\346\vZ\212\220\a\222_n\371\024= "]}],
-		 #2=>[1],
-		 #3=>[1256114214507]}
-		 delta
+		wave << delta
+		delta.propagate
+		delta
 	end
 	
 	def raw
-		hash = {
+		return @raw if @raw && @frozen
+		@raw = ProtoBuffer.encode({
 			0 => {
 				0 => @version - 1,
 				1 => prev_hash
 			},
 			1 => @author,
 			2 => @operations.map{|op|op.to_hash}
-		}
-		
-		ProtoBuffer.encode hash
+		})
 	end
 	
 	def signature
+		return @signature if @signature && @frozen
 		@@private_key ||= OpenSSL::PKey::RSA.new(File.open("../danopia.net.key").read)
-		@@private_key.sign OpenSSL::Digest::SHA1.new, raw
+		@signature = @@private_key.sign OpenSSL::Digest::SHA1.new, raw
 	end
 	
 	def to_s
-		hash = {
+		return @to_s if @to_s && @frozen
+		@to_s = ProtoBuffer.encode({
 			0 => {
 				0 => raw,
 				1 => {
@@ -270,20 +260,59 @@ class Delta
 			},
 			2 => @operations.size, # operations applied
 			3 => @time.to_i * 1000 # milliseconds not needed yet
-		}
-		
-		#pp hash
-		ProtoBuffer.encode hash
+		})
 	end
 	
 	def prev_hash
-		#puts "Previous hash for #{@version} is: #{@wave[@version - 1].hash.inspect}"
 		@wave[@version - 1].hash
 	end
 	
 	def hash
-		#puts "Hashing #{prev_hash.inspect}#{raw.inspect}"
+		return @hash if @hash && @frozen
 		@hash = Digest::SHA2.digest("#{prev_hash}#{to_s}")[0,20]
+	end
+	
+	
+	def freeze
+		@frozen = true
+		
+		@hash = nil
+		@to_s = nil
+		@signature = nil
+		@raw = nil
+	end
+	
+	def propagate
+		people = wave.participants
+		
+		# Tell people who were removed (is this right?)
+		@operations.each do |op|
+			next unless op.is_a? RemoveUserOp
+			people += op.who
+		end
+		
+		# Make a list of servers to send to
+		targets = []
+		people.each do |person|
+			person =~ /^.+@(.+)$/
+			targets << $1 if $1
+		end
+		targets.uniq!
+		
+		# But we do ignore ourself
+		targets.delete @wave.provider.name
+		
+		# Freeze and pre-render to make this faster, unless there's no targets
+		freeze
+		return if targets.empty?
+		packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(self.to_s)}]]></applied-delta></wavelet-update></item></items></event>"
+		
+		p targets
+		targets.uniq.each do |target|
+			@wave.provider.sock.send_xml 'iq', 'get', target, '<query xmlns="http://jabber.org/protocol/disco#items"/>'
+			sleep 5
+			@wave.provider.sock.send_xml 'message', 'normal', 'wave.' + target, packet
+		end
 	end
 end
 

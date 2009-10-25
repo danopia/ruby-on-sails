@@ -119,11 +119,9 @@ class ProtoBuffer
 	end
 end
 
+puts "Loading config"
 config = YAML.load(File.open('sails.conf'))
 provider = Provider.new config['domain-name'], config['service-name'] || 'wave'
-
-#pp Delta.parse(provider, 'danopia.net/w+R0PIDtU751vE/conv+root', decode64('CpkBChgIBBIUXq8BbJlJS1rqk+a8hk6dXaZFV1MSFWVjaG9leUBraWxsZXJzd2FuLmNvbRpmGmQKBG1haW4SXAoCKAQKJRojCgRsaW5lEhsKAmJ5EhVlY2hvZXlAa2lsbGVyc3dhbi5jb20KAiABCisSKW1lQGRhbm9waWEubmV0IHdhcyBhZGRlZCB0byB0aGlzIHdhdmVsZXQuEqcBCoABaC9kcKxqj+QpKRrBJTXHSI+uVc4dhCNJfPSXhsm+gxVeJEr1STurX7WW6DWFAk5MXzdGNVqgLgY8mdf1OYnzl+M+yfDVP0O1U033jyMp+f1z8gaHM+8eFnp701ergWiseUmSXCgwAgpIefDWTnJM6RMLd4LbPHh4wV2j7zzxA5MSIBvCCJ7uvs7SWtWRZRsB72lbizQ1kyV9bNLcmJyQ6W2hGAE='))
-#exit
 
 #################
 
@@ -201,6 +199,7 @@ provider << wave
 
 puts "Connecting to #{config['xmpp-connect-host']}:#{config['xmpp-connect-port']} as #{provider.name}..."
 sock = TCPSocket.new config['xmpp-connect-host'] || 'localhost', config['xmpp-connect-port'].to_i || 5275
+provider.sock = sock
 
 def sock.provider=(provider)
 	@provider = provider
@@ -340,9 +339,12 @@ until sock.closed?
 					sock.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish><item node=\"signer\"><signature-response xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"/></item></publish></pubsub>"
 				
 				elsif (packet/'publish').any?
-					puts "Publish request from #{from}"
-					sock.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish><item><submit-response xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" application-timestamp=\"1255832011424\" operations-applied=\"1\"><hashed-version history-hash=\"L/WbT5cIaLqt5zvtL1mW/d5Qjl0=\" version=\"5\"/></submit-response></item></publish></pubsub>"
-				
+					puts "Publish request from #{from} for one of my waves"
+					node = (packet/'publish/item/submit-request/delta').first
+					delta = Delta.parse(provider, node['wavelet-name'], decode64(node.inner_text))
+					pp delta
+					
+					sock.send_xml 'message', id, from, "<received xmlns=\"urn:xmpp:receipts\"/>"
 				end
 				
 			when [:iq, :result]
@@ -375,10 +377,7 @@ until sock.closed?
 				
 				elsif (packet/'pubsub/publish/item/signature-response').any?
 					puts "#{from} responded to cert, now to send wave ASDFASDFASDF."
-					
-					wave = provider['ASDFASDFASDF']
-					
-					sock.send_xml 'message', 'normal', from, "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(wave.newest.to_s)}]]></applied-delta></wavelet-update></item></items></event>"
+					provider['ASDFASDFASDF'].newest.propagate
 					
 				elsif (packet/'pubsub/items/item/applied-delta').any?
 					wave = ids[id]
@@ -396,11 +395,8 @@ until sock.closed?
 				
 				if subtype == 'received'
 					if id == '9744-2'
-						puts "#{from} ponged, attempting to send the cert and request a delta"
+						puts "#{from} ponged, attempting to send the cert"
 						sock.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"newwave.#{provider.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{provider.certs[provider.domain]}]]></certificate></signature></item></publish></pubsub>"
-						
-						#sock.send_xml '<iq type="get" id="4605-148" from="' + myname + '" to="' + from + '"><pubsub xmlns="http://jabber.org/protocol/pubsub"><items node="wavelet"><delta-history xmlns="http://waveprotocol.org/protocol/0.2/waveserver" start-version="0" start-version-hash="' + encode64(wave.deltas.first.hash) + '" end-version="' + wave.deltas.last.version.to_s + '" end-version-hash="' + encode64(wave.deltas.last.hash) + '" wavelet-name="' + wave.conv_root_path.sub('/', '!') + '"/></items></pubsub></iq>'
-						
 					else
 						puts "#{from} ACK'ed our previous packet."
 					end
