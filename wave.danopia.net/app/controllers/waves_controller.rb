@@ -1,27 +1,28 @@
 class WavesController < ApplicationController
-	before_filter :require_user
+	before_filter :require_user, :connect_remote
+	
+	def connect_remote
+		return if @remote
+		@remote = SailsRemote.connect
+		DRb.start_service
+	end
 
   def index
 		@address = "#{current_user.login}@danopia.net"
-		
-		remote = SailsRemote.connect
-		@waves = remote.waves
-    #DRb.start_service
+		@waves = @remote.waves
   end
 
   def show
 		@address = "#{current_user.login}@danopia.net"
 		
-		remote = SailsRemote.connect
-		
 		if params[:id] == 'new'
-			@wave = Wave.new('danopia.net', random_name)
-			remote << @wave
+			@wave = Wave.new('danopia.net')
+			@remote << @wave
     	redirect_to wave_path(@wave.name)
 			return
 		end
 		
-		@wave = remote[params[:id]]
+		@wave = @remote[params[:id]]
 		
 		unless @wave.participants.include? @address
 			delta = Delta.new @wave, @address
@@ -35,8 +36,7 @@ class WavesController < ApplicationController
   def update
 		@address = "#{current_user.login}@danopia.net"
 		
-		remote = SailsRemote.connect
-		@wave = remote[params[:id]]
+		@wave = @remote[params[:id]]
 		
 		if @wave.participants.include? @address
 			delta = Delta.new @wave, @address

@@ -1,41 +1,58 @@
 #require 'openssl'
 require 'drb'
 
+# A class that's focused for use with DRb. There are a few methods that just
+# call deeper methods, since DRb only sends method calls to the server if
+# called on the main DRbObject. If it weren't for these methods, a DRb client
+# wouldn't be able to do much.
 class SailsRemote
 	attr_accessor :drb, :provider
 	
-	def self.serve(provider, host=':9001')
+	# Serve a remote up
+	def self.serve(provider, host=':9000')
 		remote = SailsRemote.new(provider)
 		remote.drb = DRb.start_service("druby://#{host}", remote)
 		remote
 	end
-	def self.connect(host=':9001')
+	
+	# Connect to a remote
+	def self.connect(host=':9000')
 		DRbObject.new nil, "druby://#{host}"
 	end
 	
+	# Create a remote for the provider
 	def initialize(provider)
 		@provider = provider
 		@drb = nil
 	end
 	
+	# DRb's URI
 	def uri
 		@drb.uri if @drb
 	end
+	
+	# Shuts down the DRb server
 	def stop_service
 		@drb.stop_service if @drb
+		@drb = nil
 	end
 	
+	# Returns a list of waves from the provider
 	def waves
 		@provider.waves
 	end
 	
+	# Look up and return a wave
 	def [](name)
 		@provider[name]
 	end
+	# Add a wave
 	def <<(wave)
 		@provider << wave
 	end
 	
+	# Add a delta to a wave (faster to give the wave's name). Also propagates the
+	# delta.
 	def add_delta(wave, delta)
 		if wave.is_a? Wave
 			wave << delta# unless wave.deltas.include?(delta)
@@ -44,21 +61,15 @@ class SailsRemote
 		self[wave] << delta
 		delta.propagate
 	end
-	
-	def random_name(length=12)
-		chars = ''
-		@@letters ||= ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
-		length.times do
-			chars << @@letters[rand * @@letters.size]
-		end
-		chars
-	end
 end
 
 
+# Most popular class. Represents the local server and the waves on it, and
+# keeps a list of external certificates.
 class Provider
 	attr_accessor :certs, :cert_hash, :domain, :name, :waves, :sock
 	
+	# Create a new provider.
 	def initialize(domain, subdomain='wave')
 		@certs = {}
 		@cert_hash = nil
@@ -67,15 +78,22 @@ class Provider
 		@waves = {}
 		@sock = nil
 		
+		@letters = ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
 		@certs[domain] = open("#{domain}.cert").read.split("\n")[1..-2].join('')
 	end
 	
+	# Generate and return the certificate SHA2 hash in ASN.1/DER format, ready to
+	# send to remote servers.
 	def cert_hash
 		return @cert_hash if @cert_hash
 		@cert_hash = decode64(@certs[@domain])
 		@cert_hash = Digest::SHA2.digest "0\202\003\254#{@cert_hash}"
 	end
 	
+	# Return a wave.
+	#
+	# Can be passed in domain/w+name format for a certain wave, or w+name format
+	# to search all known waves.
 	def [](name)
 		return @waves[name] if @waves.has_key?(name)
 		
@@ -85,22 +103,56 @@ class Provider
 		waves.first
 	end
 	
+	# Add a wave to the main listing
 	def <<(wave)
 		@waves[wave.path] = wave
 	end
-end
-
-
-class FakeDelta
-	attr_accessor :wave, :version, :hash
 	
-	def initialize(wave)
-		@wave = wave
-		@version = 0
-		@hash = "wave://#{wave.conv_root_path}"
+	# Generate a random alphanumeric string
+	def random_name(length=12)
+		chars = ''
+		length.times do
+			chars << @letters[rand * @letters.size]
+		end
+		chars
+	end
+	
+	# Create a unique wave name, accross all waves known to this server
+	def random_wave_name(length=12)
+		while name=random_name(length)
+			return name unless self[name]
+		end
 	end
 end
 
+
+# Represents an unknown delta. Used for the fake "version 0" and for gaps in
+# history, so we can store hashes without storing anything else.
+class FakeDelta
+	attr_accessor :wave, :version, :hash
+	
+	# Create a fake delta. It defaults to being the infamous "version 0" for a
+	# wave. If you need to be anything else, you can pass the version/hash to
+	# the initializer or use version= and hash=.
+	def initialize(wave, version=0, hash=nil)
+		@wave = wave
+		@version = version
+		@hash = hash || "wave://#{wave.conv_root_path}"
+	end
+end
+
+# Represents the addition of a participant to a wave.
+#
+# === Usage ===
+# 	delta << AddUserOp.new('me@danopia.net')
+#
+# 	operation = AddUserOp.new('echoey@danopia.net')
+# 	operation.to_s #=> 'Added echoey@danopia.net to the wave'
+# 	operation.to_hash #=> {0 => ['echoey@danopia.net']}
+#
+# 	operation = AddUserOp.new(['echoey@acmewave.com', 'meep@acmewave.com'])
+# 	operation.to_s #=> 'Added echoey@acmewave.com, meep@acmewave.com to the wave'
+# 	operation.to_hash #=> {0 => ['echoey@danopia.net', 'meep@acmewave.com'']}
 class AddUserOp
 	attr_accessor :who
 	
@@ -118,6 +170,18 @@ class AddUserOp
 	end
 end
 
+# Represents the removal of a participant from a wave.
+#
+# === Usage ===
+# 	delta << RemoveUserOp.new('me@danopia.net')
+#
+# 	operation = RemoveUserOp.new('echoey@danopia.net')
+# 	operation.to_s #=> 'Removed echoey@danopia.net from the wave'
+# 	operation.to_hash #=> {1 => ['echoey@danopia.net']}
+#
+# 	operation = RemoveUserOp.new(['echoey@acmewave.com', 'meep@acmewave.com'])
+# 	operation.to_s #=> 'Removed echoey@acmewave.com, meep@acmewave.com from the wave'
+# 	operation.to_hash #=> {1 => ['echoey@danopia.net', 'meep@acmewave.com'']}
 class RemoveUserOp
 	attr_accessor :who
 	
@@ -135,6 +199,7 @@ class RemoveUserOp
 	end
 end
 
+# Represents the mutation of the contents of a wavelet. TODO: Fix and document!
 class MutateOp
 	attr_accessor :document_id, :operations
 	
@@ -165,10 +230,18 @@ class MutateOp
 	end
 end
 
+# Represents a version of a wavelet where the provider has details (as opposed
+# to FakeDelta).
 class Delta
 	attr_accessor :wave, :version, :author, :operations, :time
+	
+	# Frozen deltas are considered to be unchanging, so the byte form is cached
+	# to greatly speed up the creation of packets.
 	attr_reader :frozen
 	
+	# Create a new delta. Defaults to applying itself to the latest delta from
+	# the wave, but if you want to add older history in, you can override it with
+	# version=. You should also try to set the time, if you can get it.
 	def initialize(wave, author=nil)
 		@wave = wave
 		@author = author
@@ -178,6 +251,10 @@ class Delta
 		@frozen = false
 	end
 	
+	# Parses an incoming delta, taking the wavelet name (from the XML attribute)
+	# and the bytestring (doesn't handle Base64). It will handle adding the delta
+	# to a wave, creating the wave if it doesn't exist, and sending out the delta
+	# to any other servers that need it. (TODO: Only do this when local delta)
 	def self.parse provider, wavelet, data
 		data = ProtoBuffer.parse data if data.is_a? String
 		
@@ -225,6 +302,8 @@ class Delta
 		delta
 	end
 	
+	# Dumps the raw delta to a bytestring. Not ready to send out, but used for
+	# signing and hashing.
 	def raw
 		return @raw if @raw && @frozen
 		@raw = ProtoBuffer.encode({
@@ -237,12 +316,15 @@ class Delta
 		})
 	end
 	
+	# Signs the +raw+ bytestring using the provider's key. TODO: Store the key
+	# on the provider, not in Delta.
 	def signature
 		return @signature if @signature && @frozen
 		@@private_key ||= OpenSSL::PKey::RSA.new(File.open("../danopia.net.key").read)
 		@signature = @@private_key.sign OpenSSL::Digest::SHA1.new, raw
 	end
 	
+	# Get an "applied delta", ready to send out to others.
 	def to_s
 		return @to_s if @to_s && @frozen
 		@to_s = ProtoBuffer.encode({
@@ -263,16 +345,20 @@ class Delta
 		})
 	end
 	
+	# Find the previous version's hash. This is made simple because of FakeDelta.
 	def prev_hash
 		@wave[@version - 1].hash
 	end
 	
+	# Hash the delta, using SHA2 and trimming down the length of SHA1.
 	def hash
 		return @hash if @hash && @frozen
 		@hash = Digest::SHA2.digest("#{prev_hash}#{to_s}")[0,20]
 	end
 	
-	
+	# Freeze the delta for optimal speed once there aren't going to be any more
+	# changes to it. Once frozen, each of +hash+, +to_s+, +signature+, and +raw+
+	# will only generate data once, and will cache it for future calls.
 	def freeze
 		@frozen = true
 		
@@ -282,6 +368,10 @@ class Delta
 		@raw = nil
 	end
 	
+	# Send the delta out to remote servers. Called by SailsRemote#add_delta and
+	# Delta.parse.
+	#
+	# TODO: Handle each server better. (Queue, ping, etc.)
 	def propagate
 		people = wave.participants
 		
@@ -299,7 +389,7 @@ class Delta
 		end
 		targets.uniq!
 		
-		# But we do ignore ourself
+		# Don't send back to ourselfs
 		targets.delete @wave.provider.name
 		
 		# Freeze and pre-render to make this faster, unless there's no targets
@@ -316,24 +406,30 @@ class Delta
 	end
 end
 
+# Represents a Wave, either local or remote.
 class Wave
-	attr_accessor :provider, :host, :name, :deltas, :participants
+	attr_accessor :provider, :host, :name, :deltas#, :participants
 	
-	def initialize(provider, name, host=nil)
+	def initialize(provider, name=nil, host=nil)
 		@provider = provider
-		@name = name
+		@name = name || provider.random_wave_name
 		@host = host || provider.domain
 		
 		@deltas = {}
-		@participants = []
+		#@participants = []
 		
 		self << FakeDelta.new(self)
 	end
 	
+	# Returns a sorted list of all real deltas that this server has.
 	def real_deltas
 		@deltas.values.select{|delta| delta.is_a? Delta}.sort{|a, b| b.version <=> a.version}
 	end
 	
+	# Makes a list of the wave's participants by looping through the deltas.
+	#
+	# Please don't call this more than you have to, since each call re-builds the
+	# list.
 	def participants
 		participants = []
 		
@@ -347,25 +443,33 @@ class Wave
 		participants
 	end
 	
+	# Builds a wave path in the form of host/w+wave
 	def path
 		"#{@host}/w+#{@name}"
 	end
 	
+	# Builds a wavelet path to 'conv+root' (for Fedone) in the form of
+	# host/wave/conv+root
 	def conv_root_path
 		"#{path}/conv+root"
 	end
 	
+	# Returns a certain delta, by version number.
 	def [](version)
 		@deltas[version]
 	end
 	
+	# Adds a delta to the wave.
 	def <<(delta)
 		@deltas[delta.version] = delta
 	end
 	
+	# Returns the latest version number. Faster than newest.version
 	def newest_version
 		@deltas.keys.sort.last
 	end
+	
+	# Returns the latest Delta (according to version)
 	def newest
 		@deltas[@deltas.keys.sort.last]
 	end
