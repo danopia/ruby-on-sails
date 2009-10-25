@@ -164,13 +164,14 @@ class MutateOp
 end
 
 class Delta
-	attr_accessor :wave, :version, :author, :operations
+	attr_accessor :wave, :version, :author, :operations, :time
 	
 	def initialize(wave, author=nil)
 		@wave = wave
 		@author = author
 		@version = wave.newest_version + 1
 		@operations = []
+		@time = Time.now
 	end
 	
 	def self.parse provider, wavelet, data
@@ -236,14 +237,16 @@ class Delta
 	end
 	
 	def raw
-		ProtoBuffer.encode({
+		hash = {
 			0 => {
 				0 => @version - 1,
 				1 => prev_hash
 			},
 			1 => @author,
 			2 => @operations.map{|op|op.to_hash}
-		})
+		}
+		
+		ProtoBuffer.encode hash
 	end
 	
 	def signature
@@ -252,7 +255,7 @@ class Delta
 	end
 	
 	def to_s
-		ProtoBuffer.encode({
+		hash = {
 			0 => {
 				0 => raw,
 				1 => {
@@ -266,20 +269,21 @@ class Delta
 				1 => prev_hash
 			},
 			2 => @operations.size, # operations applied
-			3 => Time.now.to_i * 1000 # milliseconds not needed yet
-		})
+			3 => @time.to_i * 1000 # milliseconds not needed yet
+		}
+		
+		#pp hash
+		ProtoBuffer.encode hash
 	end
 	
 	def prev_hash
+		#puts "Previous hash for #{@version} is: #{@wave[@version - 1].hash.inspect}"
 		@wave[@version - 1].hash
 	end
 	
 	def hash
-		@hash = Digest::SHA2.digest("#{prev_hash}#{raw}")[0,20]
-	end
-	
-	def propagate
-		
+		#puts "Hashing #{prev_hash.inspect}#{raw.inspect}"
+		@hash = Digest::SHA2.digest("#{prev_hash}#{to_s}")[0,20]
 	end
 end
 
