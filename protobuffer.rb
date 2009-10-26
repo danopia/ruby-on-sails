@@ -87,6 +87,11 @@ class ProtoBuffer
 		structure = reverse_structures[structure] if structure.is_a? Symbol
 		output = ''
 		
+			puts
+			pp structure
+			pp hash
+			puts
+		
 		hash.each_pair do |type, value|
 			value = [value] unless value.is_a? Array
 			key = type
@@ -104,20 +109,20 @@ class ProtoBuffer
 			end
 
 			value.each do |arg|
-				if substructure == :varint
+				if substructure == :varint || arg.is_a?(Fixnum) || arg.is_a?(Bignum)
 					output << (key*8).chr
 					output << write_varint(arg.to_i)
 					
-				elsif substructure == :boolean
+				elsif substructure == :boolean || arg.is_a?(TrueClass) || arg.is_a?(FalseClass)
 					output << (key*8).chr
 					output << write_varint(arg ? 1 : 0)
 					
-				elsif substructure == :string
+				elsif substructure == :string || arg.is_a?(String)
 					output << (key*8+2).chr
 					write_string output, arg
 					p "String: #{arg}"
 					
-				elsif substructure.is_a?(Hash) || type.is_a?(Symbol)
+				elsif substructure.is_a?(Hash) || substructure.is_a?(Symbol)
 					if substructure.is_a? Symbol
 						substructure = structures[substructure]
 					end

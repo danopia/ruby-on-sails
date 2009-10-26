@@ -1,6 +1,5 @@
 require 'protobuffer'
 require 'pp'
-sleep 2
 
 class WaveProtoBuffer < ProtoBuffer
 	

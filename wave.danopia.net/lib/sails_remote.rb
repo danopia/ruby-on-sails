@@ -162,7 +162,7 @@ class AddUserOp
 	end
 	
 	def to_hash
-		{0 => @who}
+		{:added => @who}
 	end
 	
 	def to_s
@@ -191,7 +191,7 @@ class RemoveUserOp
 	end
 	
 	def to_hash
-		{1 => @who}
+		{:removed => @who}
 	end
 	
 	def to_s
@@ -201,32 +201,31 @@ end
 
 # Represents the mutation of the contents of a wavelet. TODO: Fix and document!
 class MutateOp
-	attr_accessor :document_id, :operations
+	attr_accessor :document_id, :components
 	
-	def initialize(document_id=nil, operations=[])
-		operations = [operations] unless operations.is_a? Array
+	def initialize(document_id=nil, components=[])
+		components = [components] unless components.is_a? Array
 		
 		@document_id = document_id
-		@operations = operations
+		@components = components
 	end
 	
-	def self.parse(hashes)
-		doc = hashes[0].first
-		operations = hashes[1].first[0]
-		MutateOp.new(doc, operations)
+	def self.parse(data)
+		#pp data
+		doc = data[:document_id]
+		components = data[:mutation][:components]
+		MutateOp.new(doc, components)
 	end
 	
 	def to_hash
-		#{2=>{2=>{0=>"main",1=> {0=>["(\004",
-		#	{2=>{0=>"line", 1=>{0=>"by", 1=>author}}}," \001",
-		#	{1=>text}]}}}}
-		{2 =>
-			{0 => @document_id,
-			 1 => {0 => operations}}}
+		{:mutate => {
+			:mutation => {
+				:components => @components},
+			:document_id => @document_id}}
 	end
 	
 	def to_s
-		operations.last[1]
+		components.last.values.first
 	end
 end
 
@@ -256,7 +255,7 @@ class Delta
 	# to a wave, creating the wave if it doesn't exist, and sending out the delta
 	# to any other servers that need it. (TODO: Only do this when local delta)
 	def self.parse provider, wavelet, data
-		data = ProtoBuffer.parse data if data.is_a? String
+		data = WaveProtoBuffer.parse(:delta, data) if data.is_a? String
 		
 		wavelet =~ /^(.+)\/w\+(.+)\/(.+)$/
 		wave_domain, wave_name, wavelet_name = $1, $2, $3
@@ -268,32 +267,32 @@ class Delta
 			provider << wave
 		end
 		
-		data = data[0].first unless data.size < 4 # remove extra stuff if it's an applied delta
-		#pp data
-		version = data[0].first[0].first[0].first + 1
+		data = data[:signed_delta] if data[:signed_delta] # remove extra stuff if it's an applied delta
+		
+		version = data[:delta][:applied_to][:version] + 1
 		applied_to = wave[version - 1]
 		
 		unless applied_to
 			applied_to = FakeDelta.new(wave)
 			applied_to.version = version - 1
-			applied_to.hash = data[0].first[0].first[1].first
+			applied_to.hash = data[:delta][:applied_to][:hash]
 			wave << applied_to
 		end
 		
 		return wave[version] if wave[version].is_a? Delta
 		
-		delta = Delta.new(wave, data[0].first[1].first)
+		delta = Delta.new(wave, data[:delta][:author])
 		delta.version = version
-		data[0].first[2].first.each_pair do |type, ops|
-			ops.each do |args|
-				case type
-					when 0
-						delta.operations << AddUserOp.new(args)
-					when 1
-						delta.operations << AddUserOp.new(args)
-					when 2
-						delta.operations << MutateOp.parse(args)
-				end
+		data[:delta][:operations].each do |operation|
+			type = operation.keys.first
+			details = operation.values.first
+			case type
+				when :added
+					delta.operations << AddUserOp.new(details)
+				when :removed
+					delta.operations << RemoveUserOp.new(details)
+				when :mutate
+					delta.operations << MutateOp.parse(details)
 			end
 		end
 		
@@ -306,14 +305,17 @@ class Delta
 	# signing and hashing.
 	def raw
 		return @raw if @raw && @frozen
-		@raw = ProtoBuffer.encode({
-			0 => {
-				0 => @version - 1,
-				1 => prev_hash
-			},
-			1 => @author,
-			2 => @operations.map{|op|op.to_hash}
+		@raw = WaveProtoBuffer.encode(:delta, {
+			:applied_to => prev_version,
+			:author => @author,
+			:operations => @operations.map{|op|op.to_hash}
 		})
+	end
+	
+	# Helper method to return a hash of the previous version/hash.
+	def prev_version
+		{:version => @version - 1,
+		 :hash => prev_hash}
 	end
 	
 	# Signs the +raw+ bytestring using the provider's key. TODO: Store the key
@@ -324,24 +326,27 @@ class Delta
 		@signature = @@private_key.sign OpenSSL::Digest::SHA1.new, raw
 	end
 	
-	# Get an "applied delta", ready to send out to others.
+	# Get a non-"applied delta", ready to send to a wave's master server.
 	def to_s
 		return @to_s if @to_s && @frozen
-		@to_s = ProtoBuffer.encode({
-			0 => {
-				0 => raw,
-				1 => {
-					0 => signature,
-					1 => @wave.provider.cert_hash,
-					2 => 1 # alg (rsa)
-				}
-			},
-			1 => {
-				0 => @version - 1,
-				1 => prev_hash
-			},
-			2 => @operations.size, # operations applied
-			3 => @time.to_i * 1000 # milliseconds not needed yet
+		@to_s = WaveProtoBuffer.encode(:signed_delta, {
+			:delta => raw,
+			:signature => {
+				:signature => signature,
+				:signer_id => @wave.provider.cert_hash,
+				:signer_id_alg => 1 # 1 = RSA
+			}
+		})
+	end
+	
+	# Get an "applied delta", ready to send out to others.
+	def to_applied
+		return @to_applied if @to_applied && @frozen
+		@to_applied = WaveProtoBuffer.encode(:applied_delta, {
+			:signed_delta => to_s,
+			:applied_to => prev_version,
+			:operations_applied => @operations.size, # operations applied
+			:timestamp => @time.to_i * 1000 # milliseconds not needed yet
 		})
 	end
 	
@@ -357,13 +362,15 @@ class Delta
 	end
 	
 	# Freeze the delta for optimal speed once there aren't going to be any more
-	# changes to it. Once frozen, each of +hash+, +to_s+, +signature+, and +raw+
-	# will only generate data once, and will cache it for future calls.
+	# changes to it. Once frozen, each of +hash+, +to_s+, +signature+, +raw+, and
+	# +to_applied+ will only generate data once, and will cache it for future
+	# calls.
 	def freeze
 		@frozen = true
 		
 		@hash = nil
 		@to_s = nil
+		@to_applied = nil
 		@signature = nil
 		@raw = nil
 	end
