@@ -1,6 +1,10 @@
 require 'stringio'
 
 class ProtoBuffer
+	####################
+	# Decoding
+	####################
+	
 	def self.parse(structure, data)
 		data = StringIO.new(data)
 		hash = {}
@@ -20,8 +24,7 @@ class ProtoBuffer
 		type = type.first if type.is_a? Array
 		
 		unless type
-			puts "UNEXPECTED KEY: #{key}"
-			puts "Expected one of #{structure.keys.join(', ')}"
+			puts "UNEXPECTED KEY: #{key} (expected one of #{structure.keys.join(', ')})"
 			return
 		end
 		
@@ -82,6 +85,9 @@ class ProtoBuffer
 		io.read read_varint(io)
 	end
 	
+	####################
+	# Encoding
+	####################
 
 	def self.encode(structure, hash)
 		structure = reverse_structures[structure] if structure.is_a? Symbol
@@ -153,8 +159,9 @@ class ProtoBuffer
 		io << write_varint(string.size) << string
 	end
 	
-	############
-	# DSL stuff
+	####################
+	# Structure helpers
+	####################
 	
 	class Param
 		attr_accessor :type, :label, :index

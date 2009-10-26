@@ -1,9 +1,26 @@
 require 'protobuffer'
-require 'pp'
 
 class WaveProtoBuffer < ProtoBuffer
-	
+
+	##########################
+	# Core structures
+	##########################
 	structure :hashed_version, {1 => varint(:version), 2 => string(:hash)}
+
+	structure :delta_signature, {
+		1 => string(:signature),
+		2 => string(:signer_id),
+		3 => varint(:signer_id_alg)} # 1 = SHA1-RSA
+	
+	structure :signed_delta, {
+		1 => delta,
+		2 => delta_signature(:signature)} # 1 = SHA1-RSA
+
+	structure :applied_delta, {
+		1 => signed_delta,
+		2 => hashed_version(:applied_to),
+		3 => varint(:operations_applied),
+		4 => varint(:timestamp)} # UNIX epoche * 1000 + milliseconds
 
 	structure :delta, {
 		1 => hashed_version(:applied_to),
@@ -11,7 +28,23 @@ class WaveProtoBuffer < ProtoBuffer
 		3 => [operation(:operations)]
 	}
 	
+	##########################
+	# Operation structures
+	##########################
+	structure :mutate, {
+		1 => string(:document_id), # always 'main' as far as I can tell
+		2 => document_op(:mutation)}
+
+
+	structure :operation, {
+		1 => string(:added),
+		2 => string(:removed),
+		3 => mutate,
+		4 => boolean(:noop)}
 	
+	##########################
+	# Mutation structures
+	##########################
 	structure :key_value_pair, {1 => string(:key), 2 => string(:value)}
 
 	structure :key_value_update, {
@@ -21,7 +54,6 @@ class WaveProtoBuffer < ProtoBuffer
 		3 => string(:new_value), # absent field means that the attribute should be
 			# removed/the annotation should be set to null.
 	}
-
 
 	structure :annotation_boundary, {
 		1 => boolean(:empty),
@@ -45,6 +77,7 @@ class WaveProtoBuffer < ProtoBuffer
 		2 => [key_value_update(:updates)] # MUST NOT have two updates with the same key
 	}
 	
+	
 	structure :document_op, {1 => [mutate_component(:components)]} # Lol?
 			
 	structure :mutate_component, {
@@ -58,31 +91,4 @@ class WaveProtoBuffer < ProtoBuffer
 		8 => boolean(:delete_element_end),
 		9 => replace_attributes,
 		10 => update_attributes}
-			
-	structure :mutate, {
-		1 => string(:document_id), # always 'main' as far as I can tell
-		2 => document_op(:mutation)}
-
-
-	structure :operation, {
-		1 => string(:added),
-		2 => string(:removed),
-		3 => mutate,
-		4 => boolean(:noop)}
-	
-	structure :delta_signature, {
-		1 => string(:signature),
-		2 => string(:signer_id),
-		3 => varint(:signer_id_alg)} # 1 = SHA1-RSA
-	
-	structure :signed_delta, {
-		1 => delta,
-		2 => delta_signature(:signature)} # 1 = SHA1-RSA
-
-	structure :applied_delta, {
-		1 => signed_delta,
-		2 => hashed_version(:applied_to),
-		3 => varint(:operations_applied),
-		4 => varint(:timestamp)} # UNIX epoche * 1000 + milliseconds
-
 end

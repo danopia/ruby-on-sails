@@ -110,11 +110,7 @@ class Provider
 	
 	# Generate a random alphanumeric string
 	def random_name(length=12)
-		chars = ''
-		length.times do
-			chars << @letters[rand * @letters.size]
-		end
-		chars
+		('' * length).map { @letters[rand * @letters.size] }.join('')
 	end
 	
 	# Create a unique wave name, accross all waves known to this server
@@ -211,7 +207,6 @@ class MutateOp
 	end
 	
 	def self.parse(data)
-		#pp data
 		doc = data[:document_id]
 		components = data[:mutation][:components]
 		MutateOp.new(doc, components)
@@ -301,21 +296,18 @@ class Delta
 		delta
 	end
 	
-	# Dumps the raw delta to a bytestring. Not ready to send out, but used for
+	# Dumps the raw delta to a hash. Not ready to send out, but used for
 	# signing and hashing.
-	def raw
-		return @raw if @raw && @frozen
-		@raw = WaveProtoBuffer.encode(:delta, {
-			:applied_to => prev_version,
+	def delta_hash
+		{	:applied_to => prev_version,
 			:author => @author,
-			:operations => @operations.map{|op|op.to_hash}
-		})
+			:operations => @operations.map{|op|op.to_hash}}
 	end
 	
 	# Helper method to return a hash of the previous version/hash.
 	def prev_version
-		{:version => @version - 1,
-		 :hash => prev_hash}
+		{	:version => @version - 1,
+			:hash => prev_hash}
 	end
 	
 	# Signs the +raw+ bytestring using the provider's key. TODO: Store the key
@@ -362,7 +354,7 @@ class Delta
 	end
 	
 	# Freeze the delta for optimal speed once there aren't going to be any more
-	# changes to it. Once frozen, each of +hash+, +to_s+, +signature+, +raw+, and
+	# changes to it. Once frozen, each of +hash+, +to_s+, +signature+, and
 	# +to_applied+ will only generate data once, and will cache it for future
 	# calls.
 	def freeze
@@ -372,7 +364,6 @@ class Delta
 		@to_s = nil
 		@to_applied = nil
 		@signature = nil
-		@raw = nil
 	end
 	
 	# Send the delta out to remote servers. Called by SailsRemote#add_delta and
