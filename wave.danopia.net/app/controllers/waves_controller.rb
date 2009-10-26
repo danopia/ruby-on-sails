@@ -28,7 +28,7 @@ class WavesController < ApplicationController
 			delta = Delta.new @wave, @address
 			delta.operations << AddUserOp.new(@address)
 			delta.operations << MutateOp.new('main', create_fedone_line(@address, "Hey there, this is #{@address}, and I'm using Ruby on Sails!"))
-    	remote.add_delta @wave, delta
+    	@remote.add_delta @wave, delta
     end
     
   end
@@ -41,7 +41,7 @@ class WavesController < ApplicationController
 		if @wave.participants.include? @address
 			delta = Delta.new @wave, @address
 			delta.operations << MutateOp.new('main', create_fedone_line(@address, params[:message]))
-    	remote.add_delta @wave, delta
+    	@remote.add_delta @wave, delta
     	
     	redirect_to wave_path(@wave.name) + '#r' + delta.version.to_s
     else
