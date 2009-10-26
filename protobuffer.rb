@@ -1,10 +1,6 @@
 require 'stringio'
 
 class ProtoBuffer
-	def self.structures
-		@structures ||= {}
-	end
-	
 	def self.parse(structure, data)
 		data = StringIO.new(data)
 		hash = {}
@@ -87,20 +83,52 @@ class ProtoBuffer
 	end
 	
 
-	def self.encode(hash)
+	def self.encode(structure, hash)
+		structure = reverse_structures[structure] if structure.is_a? Symbol
 		output = ''
+		
 		hash.each_pair do |type, value|
 			value = [value] unless value.is_a? Array
+			key = type
+			
+			substructure = structure[type]
+			substructure = substructure.first if substructure.is_a? Array
+			
+			if substructure.is_a? Param
+				key = substructure.index
+				substructure = substructure.type
+			end
+			
+			if substructure.is_a?(Symbol) && !([:varint, :string, :boolean].include?(substructure))
+				substructure = reverse_structures[substructure]
+			end
+
 			value.each do |arg|
-				if arg.is_a? Hash
-					output << (type*8+10).chr
-					write_string output, encode(arg)
-				elsif arg.is_a?(Fixnum) || arg.is_a?(Bignum)
-					output << (type*8+8).chr
-					output << write_varint(arg)
-				else
-					output << (type*8+10).chr
+				if substructure == :varint
+					output << (key*8).chr
+					output << write_varint(arg.to_i)
+					
+				elsif substructure == :boolean
+					output << (key*8).chr
+					output << write_varint(arg ? 1 : 0)
+					
+				elsif substructure == :string
+					output << (key*8+2).chr
 					write_string output, arg
+					p "String: #{arg}"
+					
+				elsif substructure.is_a?(Hash) || type.is_a?(Symbol)
+					if substructure.is_a? Symbol
+						substructure = structures[substructure]
+					end
+					
+					output << (key*8+2).chr
+					write_string output, encode(substructure, arg)
+					p "Sub structure..."
+				
+				else
+					puts "Unknown type: #{type}"
+					return
 				end
 			end
 		end
@@ -120,17 +148,58 @@ class ProtoBuffer
 		io << write_varint(string.size) << string
 	end
 	
+	############
+	# DSL stuff
+	
 	class Param
-		attr_accessor :type, :label
+		attr_accessor :type, :label, :index
 		
-		def initialize(type, label)
+		def initialize(type, label, index=nil)
 			@type = type
 			@label = label
+			@index = index
 		end
 	end
 	
+	def self.structures
+		@structures ||= {}
+	end
+	
+	def self.reverse_structures
+		@reverse_structures ||= {}
+	end
+	
+	# Yay ugly
 	def self.structure(key, structure)
+		structure.each_pair do |index, type|
+			type = type.first if type.is_a? Array
+			type.index = index if type.is_a? Param
+		end
+		
 		structures[key] = structure
+		
+		reverse = {}
+		structure.each_pair do |key2, type|
+			reverse[key2] = type # so that indexes still work
+			
+			type2 = type
+			type2 = type.first if type.is_a? Array
+			
+			label = key2
+			if type2.is_a? Param
+				if type2.label
+					label = type2.label
+				elsif type.type.is_a? Symbol
+					label = type2.type
+				end
+			elsif type2.is_a?(Symbol) && !([:varint, :string, :boolean].include?(type2))
+				label = type2
+			end
+			
+			reverse[label] = type
+		end
+		
+		reverse_structures[key] = reverse
 	end
 	
 	def self.method_missing(type, label=nil)
