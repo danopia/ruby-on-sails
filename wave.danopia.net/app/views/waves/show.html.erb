@@ -1,6 +1,10 @@
 <h2>Wave: <%=h @wave.name %> (from <%=h @wave.host %>)</h2>
 
-<p><em>Participants:</em> <%=h @wave.participants.join(', ') %></p>
+<p><em>Participants:</em>
+<% @wave.participants.each do |address| -%>
+<%=mail_to address %> (<%=link_to 'remove', wave_remove_path(@wave.name, address) %>)
+<% end -%>
+</p>
 
 <% @wave.real_deltas.each do |delta| %>
 <hr/>

@@ -4,8 +4,13 @@ ActionController::Routing::Routes.draw do |map|
 	#map.domain_wave 'waves/:domain/:id', :controller => 'waves', :action => 'show'
 	map.waves 'waves', :controller => 'waves', :action => 'index'
 	map.wave 'waves/:id', :controller => 'waves', :action => 'show'
+	map.wave_add 'waves/:id/add', :controller => 'waves', :action => 'add'
+	map.wave_remove 'waves/:id/remove/:who', :controller => 'waves', :action => 'remove',
+	  :requirements => { :who => %r([^/;,?]+) }
+
 	map.wave_update 'waves/:id/update', :controller => 'waves', :action => 'update'
-	map.domain_wave 'waves/:id/:domain', :controller => 'waves', :action => 'show'
+	map.domain_wave 'waves/:domain/:id', :controller => 'waves', :action => 'show',
+	  :requirements => { :domain => %r([^/;,?]+) }
   
   map.login 'login', :controller => 'user_sessions', :action => 'new'
   map.logout 'logout', :controller => 'user_sessions', :action => 'destroy'

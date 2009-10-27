@@ -2,7 +2,7 @@
 
 <%=link_to 'New wave', wave_path('new') %>
 
-<% @waves.each_value do |wave| -%>
+<% @waves.each do |wave| -%>
 
 <% if wave.host == 'danopia.net' || true -%>
 <h3><%=link_to wave.name, wave_path(wave.name) %></h3>

@@ -1,22 +1,16 @@
 class WavesController < ApplicationController
 	before_filter :require_user, :connect_remote
-	
-	def connect_remote
-		return if @remote
-		@remote = SailsRemote.connect
-		DRb.start_service
-	end
 
   def index
 		@address = "#{current_user.login}@danopia.net"
-		@waves = @remote.waves
+		@waves = @remote.all_waves
   end
 
   def show
 		@address = "#{current_user.login}@danopia.net"
 		
 		if params[:id] == 'new'
-			@wave = Wave.new('danopia.net')
+			@wave = Wave.new(@remote.provider, 'asdf')
 			@remote << @wave
     	redirect_to wave_path(@wave.name)
 			return
@@ -41,26 +35,45 @@ class WavesController < ApplicationController
 		if @wave.participants.include? @address
 			delta = Delta.new @wave, @address
 			delta.operations << MutateOp.new('main', create_fedone_line(@address, params[:message]))
-    	@remote.add_delta @wave, delta
+    	render :text => @remote.add_delta(@wave, delta).inspect
     	
-    	redirect_to wave_path(@wave.name) + '#r' + delta.version.to_s
+    	#redirect_to wave_path(@wave.name) + '#r' + delta.version.to_s
     else
     	render :text => 'fail.'
     end
   end
 
+  def remove
+		@address = "#{current_user.login}@danopia.net"
+		@wave = @remote[params[:id]]
+		
+		if !@wave.participants.include? @address
+    	flash[:error] = 'fail.'
+		elsif !( params[:who] && @wave.participants.include?(params[:who]) )
+    	flash[:error] = "#{params[:who]} isn't in this wave."
+    else
+			delta = Delta.new @wave, @address
+			delta.operations << RemoveUserOp.new(params[:who])
+    	@remote.add_delta(@wave, delta)
+    end
+    
+    redirect_to wave_path(@wave.name) + '#r' + delta.version.to_s
+  end
+
 	protected
 	
 	def create_fedone_line(author, text)
-		#{2=>{2=>{0=>"main",1=> {0=>
-		#[#"(\004",
-		#	{2=>{0=>"line", 1=>{0=>"by", 1=>author}}}," \001",
-		#	{1=>text}]#}}}}
 		[{:element_start=>
 			{:type=>"line",
 			 :attributes=>
 				[{:value=>author, :key=>"by"}]}},
-		{:element_end=>true},
-		{:characters=>text}]
-	end	
+		 {:element_end=>true},
+		 {:characters=>text}]
+	end
+	
+	def connect_remote
+		return if @remote
+		@remote = SailsRemote.connect
+		DRb.start_service
+	end
 end

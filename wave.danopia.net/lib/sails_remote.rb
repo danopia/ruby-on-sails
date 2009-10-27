@@ -37,9 +37,15 @@ class SailsRemote
 		@drb = nil
 	end
 	
-	# Returns a list of waves from the provider
-	def waves
-		@provider.waves
+	# Returns a list of waves from all servers
+	def all_waves
+		waves = []
+		waves += @provider.waves.values
+		pp @provider
+		@provider.servers.each_value do |server|
+			waves += server.waves.values
+		end
+		waves
 	end
 	
 	# Look up and return a wave
@@ -75,7 +81,7 @@ class Server
 		@certificate = nil
 		@certificate_hash = nil
 		@domain = domain
-		@name = name
+		@name = name || domain
 		@waves = {}
 		@queue = []
 		@state = :uninited
@@ -89,7 +95,7 @@ class Server
 	end
 	
 	def name=(new_name)
-		@provider.servers.delete @name.downcase unless @name == @domain
+		@provider.servers.delete @name.downcase unless !@name || @name == @domain
 		@provider.servers[new_name.downcase] = self
 		
 		@name = new_name
@@ -140,9 +146,24 @@ class Server
 	
 	# Create a unique wave name, accross all waves known to this server
 	def random_wave_name(length=12)
-		while name = Server.random_name(length)
-			return name unless self[name]
-		end
+		name = Server.random_name(length)
+		name = Server.random_name(length) while self[name]
+		name
+	end
+end
+
+class ServerList < Hash
+	def [](server)
+		return nil unless server
+		super server.downcase
+	end
+	def []=(name, server)
+		return nil unless name
+		super name.downcase, server
+	end
+	def delete(server)
+		return nil unless server
+		super server.downcase
 	end
 end
 
@@ -153,10 +174,14 @@ class Provider < Server
 	
 	# Create a new provider.
 	def initialize(domain, subdomain='wave')
-		super self, domain, "#{subdomain}.#{domain}"
+		subdomain = "#{subdomain}." if subdomain
+		puts domain
+		puts "#{subdomain}#{domain}"
+		super self, domain, "#{subdomain}#{domain}"
+		
 		
 		@sock = nil
-		@servers = {}
+		@servers = ServerList.new
 		
 		self.certificate = open("#{@domain}.cert").read.split("\n")[1..-2].join('')
 	end
@@ -362,7 +387,7 @@ class Delta
 			timestamp = data[:timestamp]
 			data = data[:signed_delta]
 		else
-			data = WaveProtoBuffer.parse(:delta, data) if data.is_a? String
+			data = WaveProtoBuffer.parse(:signed_delta, data) if data.is_a? String
 		end
 		
 		wavelet =~ /^(.+)\/w\+(.+)\/(.+)$/
@@ -411,9 +436,12 @@ class Delta
 	# Dumps the raw delta to a hash. Not ready to send out, but used for
 	# signing and hashing.
 	def delta_data
-		{	:applied_to => prev_version,
+		puts 't'
+		a={	:applied_to => prev_version,
 			:author => @author,
 			:operations => @operations.map{|op|op.to_hash}}
+		puts 'y'
+		a
 	end
 	
 	def delta_raw
@@ -429,14 +457,18 @@ class Delta
 	# Signs the +raw+ bytestring using the provider's key. TODO: Store the key
 	# on the provider, not in Delta.
 	def signature
+		puts 'j'
 		return @signature if @signature && @frozen
 		@@private_key ||= OpenSSL::PKey::RSA.new(File.open("../danopia.net.key").read)
 		@signature = @@private_key.sign OpenSSL::Digest::SHA1.new, delta_raw
+		puts 'k'
+		@signature
 	end
 	
 	# Get a non-"applied delta", ready to send to a wave's master server.
 	def to_s
 		return @to_s if @to_s && @frozen
+		puts 's'
 		@to_s = WaveProtoBuffer.encode(:signed_delta, {
 			:delta => delta_data,
 			:signature => {
@@ -445,10 +477,13 @@ class Delta
 				:signer_id_alg => 1 # 1 = RSA
 			}
 		})
+		puts 'd'
+		@to_s
 	end
 	
 	# Get an "applied delta", ready to send out to others.
 	def to_applied
+		puts 'a'
 		return @to_applied if @to_applied && @frozen
 		@to_applied = WaveProtoBuffer.encode(:applied_delta, {
 			:signed_delta => to_s,
@@ -456,6 +491,8 @@ class Delta
 			:operations_applied => @operations.size, # operations applied
 			:timestamp => @time.to_i * 1000 # milliseconds not needed yet
 		})
+		puts 'f'
+		@to_applied 
 	end
 	
 	# Find the previous version's hash. This is made simple because of FakeDelta.
@@ -487,43 +524,68 @@ class Delta
 	#
 	# TODO: Handle each server better. (Queue, ping, etc.)
 	def propagate applied=false
-		people = wave.participants
-		
-		# Tell people who were removed (is this right?)
-		@operations.each do |op|
-			next unless op.is_a? RemoveUserOp
-			people += op.who
-		end
-		
-		# Make a list of servers to send to
-		targets = []
-		people.each do |person|
-			person =~ /^.+@(.+)$/
-			targets << $1 if $1
-		end
-		targets.uniq!
-		
-		# Don't send back to ourselfs
-		targets.delete @wave.provider.name
-		
-		# Freeze and pre-render to make this faster, unless there's no targets
-		freeze
-		return if targets.empty?
-		packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(self.to_applied)}]]></applied-delta></wavelet-update></item></items></event>"
-		
-		p targets
-		
-		targets.uniq.each do |target|
-			server = @wave.provider.servers[target.downcase]
+		if @wave.local?
+			people = wave.participants
+	puts 20
 			
-			unless server
-				server = Server.new target.downcase
-				@wave.provider << server
+			# Tell people who were removed (is this right?)
+			@operations.each do |op|
+				next unless op.is_a? RemoveUserOp
+				people += op.who
 			end
 			
-			server << ['message', 'normal', packet]
-			p ['message', 'normal', packet]
+	puts 21
+			# Make a list of servers to send to
+			targets = []
+			people.each do |person|
+				person =~ /^.+@(.+)$/
+				targets << $1 if $1
+			end
+			targets.uniq!
+	puts 22
+			
+			# Don't send back to ourselfs
+			targets.delete @wave.provider.name
+			
+	puts 23
+			# Freeze and pre-render to make this faster, unless there's no targets
+			freeze
+	puts 24
+			return if targets.empty?
+	puts 25
+			packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(self.to_applied)}]]></applied-delta></wavelet-update></item></items></event>"
+			
+	puts 26
+			p targets
+			
+			targets.uniq.each do |target|
+				server = @wave.provider.servers[target.downcase]
+				
+	puts 27
+				unless server
+					server = Server.new @wave.provider, target.downcase
+					@wave.provider << server
+				end
+				
+	puts 28
+				server << ['message', 'normal', packet]
+				p ['message', 'normal', packet]
+			end
+	puts 29
+	
+		else # Then it's remote; send out the request
+			freeze
+			@wave.provider.servers[@wave.host] << ['iq', 'set', 
+				"<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"wavelet\"><item><submit-request xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><delta wavelet-name=\"#{@wave.conv_root_path}\"><![CDATA[#{encode64(self.to_s)}]]></delta></submit-request></item></publish></pubsub>"]
+		
 		end
+	end
+	
+	def encode64(data)
+		Base64.encode64(data).gsub("\n", '')
+	end
+	def decode64(data)
+		Base64.decode64(data)
 	end
 end
 
@@ -593,5 +655,10 @@ class Wave
 	# Returns the latest Delta (according to version)
 	def newest
 		@deltas[@deltas.keys.sort.last]
+	end
+	
+	# Is the wave local?
+	def local?
+		@host == @provider.domain
 	end
 end

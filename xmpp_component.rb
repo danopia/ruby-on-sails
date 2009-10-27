@@ -25,7 +25,7 @@ end
 
 puts "Loading config"
 config = YAML.load(File.open('sails.conf'))
-provider = Provider.new config['domain-name'], config['service-name'] || 'wave'
+provider = Provider.new config['domain-name'], config['service-name']
 
 puts "Connecting to #{config['xmpp-connect-host']}:#{config['xmpp-connect-port']} as #{provider.name}..."
 sock = TCPSocket.new config['xmpp-connect-host'] || 'localhost', config['xmpp-connect-port'].to_i || 5275
@@ -112,7 +112,7 @@ provider << wave
 
 #################
 
-wave = Wave.new(provider, 'ASDFASDFASDF', 'newwave.danopia.net')
+wave = Wave.new(provider, 'ASDFASDFASDF')
 
 delta = Delta.new(wave, "me@newwave.danopia.net")
 delta.operations << AddUserOp.new('me@newwave.danopia.net') # Add myself to the conv_root_path
@@ -348,7 +348,7 @@ pp WaveProtoBuffer.parse(:applied_delta, delta.to_applied)
 						server.state = :ponged
 						puts "#{from} ponged, attempting to send my cert (state = :ponged)"
 						
-						sock.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"newwave.#{provider.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{provider.certificate}]]></certificate></signature></item></publish></pubsub>"
+						sock.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{provider.certificate}]]></certificate></signature></item></publish></pubsub>"
 					
 					else
 						puts "#{from} ACK'ed our previous packet."
