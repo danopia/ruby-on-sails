@@ -41,7 +41,6 @@ class SailsRemote
 	def all_waves
 		waves = []
 		waves += @provider.waves.values
-		pp @provider
 		@provider.servers.each_value do |server|
 			waves += server.waves.values
 		end
@@ -358,7 +357,7 @@ end
 # Represents a version of a wavelet where the provider has details (as opposed
 # to FakeDelta).
 class Delta
-	attr_accessor :wave, :version, :author, :operations, :time
+	attr_accessor :wave, :version, :author, :operations, :time, :applied, :signature, :signer_id
 	
 	# Frozen deltas are considered to be unchanging, so the byte form is cached
 	# to greatly speed up the creation of packets.
@@ -373,7 +372,9 @@ class Delta
 		@version = wave.newest_version + 1
 		@operations = []
 		@time = Time.now
+		@applied = false
 		@frozen = false
+		@signer_id || wave.provider.certificate_hash
 	end
 	
 	# Parses an incoming delta, taking the wavelet name (from the XML attribute)
@@ -383,7 +384,7 @@ class Delta
 	def self.parse provider, wavelet, data, applied=false
 		timestamp = nil
 		if applied
-			data = WaveProtoBuffer.parse(:applied_delta, data) if data.is_a? String
+			WaveProtoBuffer.parse(:applied_delta, data) if data.is_a? String
 			timestamp = data[:timestamp]
 			data = data[:signed_delta]
 		else
@@ -415,6 +416,9 @@ class Delta
 		delta = Delta.new(wave, data[:delta][:author])
 		delta.version = version
 		delta.time = Time.at(timestamp / 1000) if timestamp
+		delta.signature = data[:signature][:signature]
+		delta.signer_id = data[:signature][:signer_id]
+		
 		data[:delta][:operations].each do |operation|
 			type = operation.keys.first
 			details = operation.values.first
@@ -429,19 +433,23 @@ class Delta
 		end
 		
 		wave << delta
-		delta.propagate(applied) unless applied
+		if applied
+			wave.apply delta
+		else
+			delta.propagate(applied)
+		end
+		
+		puts "Delta #{delta.version}'s applied_to hash is #{data[:delta][:applied_to][:hash].inspect} and the actual previous hash is #{applied_to.hash.inspect}"
+		
 		delta
 	end
 	
 	# Dumps the raw delta to a hash. Not ready to send out, but used for
 	# signing and hashing.
 	def delta_data
-		puts 't'
-		a={	:applied_to => prev_version,
+		{	:applied_to => prev_version,
 			:author => @author,
 			:operations => @operations.map{|op|op.to_hash}}
-		puts 'y'
-		a
 	end
 	
 	def delta_raw
@@ -457,33 +465,30 @@ class Delta
 	# Signs the +raw+ bytestring using the provider's key. TODO: Store the key
 	# on the provider, not in Delta.
 	def signature
-		puts 'j'
-		return @signature if @signature && @frozen
+		return @signature if @signature
 		@@private_key ||= OpenSSL::PKey::RSA.new(File.open("../danopia.net.key").read)
-		@signature = @@private_key.sign OpenSSL::Digest::SHA1.new, delta_raw
-		puts 'k'
-		@signature
+		if @frozen
+			@signature = @@private_key.sign OpenSSL::Digest::SHA1.new, delta_raw
+		else
+			@@private_key.sign OpenSSL::Digest::SHA1.new, delta_raw
+		end
 	end
 	
 	# Get a non-"applied delta", ready to send to a wave's master server.
 	def to_s
 		return @to_s if @to_s && @frozen
-		puts 's'
 		@to_s = WaveProtoBuffer.encode(:signed_delta, {
 			:delta => delta_data,
 			:signature => {
 				:signature => signature,
-				:signer_id => @wave.provider.certificate_hash,
+				:signer_id => @signer_id,
 				:signer_id_alg => 1 # 1 = RSA
 			}
 		})
-		puts 'd'
-		@to_s
 	end
 	
 	# Get an "applied delta", ready to send out to others.
 	def to_applied
-		puts 'a'
 		return @to_applied if @to_applied && @frozen
 		@to_applied = WaveProtoBuffer.encode(:applied_delta, {
 			:signed_delta => to_s,
@@ -491,8 +496,6 @@ class Delta
 			:operations_applied => @operations.size, # operations applied
 			:timestamp => @time.to_i * 1000 # milliseconds not needed yet
 		})
-		puts 'f'
-		@to_applied 
 	end
 	
 	# Find the previous version's hash. This is made simple because of FakeDelta.
@@ -525,8 +528,9 @@ class Delta
 	# TODO: Handle each server better. (Queue, ping, etc.)
 	def propagate applied=false
 		if @wave.local?
+			wave.apply self
+			
 			people = wave.participants
-	puts 20
 			
 			# Tell people who were removed (is this right?)
 			@operations.each do |op|
@@ -534,7 +538,6 @@ class Delta
 				people += op.who
 			end
 			
-	puts 21
 			# Make a list of servers to send to
 			targets = []
 			people.each do |person|
@@ -542,42 +545,34 @@ class Delta
 				targets << $1 if $1
 			end
 			targets.uniq!
-	puts 22
 			
 			# Don't send back to ourselfs
 			targets.delete @wave.provider.name
 			
-	puts 23
 			# Freeze and pre-render to make this faster, unless there's no targets
 			freeze
-	puts 24
 			return if targets.empty?
-	puts 25
+			
 			packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(self.to_applied)}]]></applied-delta></wavelet-update></item></items></event>"
 			
-	puts 26
-			p targets
+			puts "Sending to #{targets.join(', ')}"
 			
 			targets.uniq.each do |target|
 				server = @wave.provider.servers[target.downcase]
 				
-	puts 27
 				unless server
 					server = Server.new @wave.provider, target.downcase
 					@wave.provider << server
 				end
 				
-	puts 28
 				server << ['message', 'normal', packet]
-				p ['message', 'normal', packet]
+				puts "Queued a packet for #{server.name}"
 			end
-	puts 29
 	
 		else # Then it's remote; send out the request
 			freeze
 			@wave.provider.servers[@wave.host] << ['iq', 'set', 
 				"<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"wavelet\"><item><submit-request xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><delta wavelet-name=\"#{@wave.conv_root_path}\"><![CDATA[#{encode64(self.to_s)}]]></delta></submit-request></item></publish></pubsub>"]
-		
 		end
 	end
 	
@@ -591,7 +586,7 @@ end
 
 # Represents a Wave, either local or remote.
 class Wave
-	attr_accessor :provider, :host, :name, :deltas#, :participants
+	attr_accessor :provider, :host, :name, :deltas, :participants, :contents, :applied_to
 	
 	def initialize(provider, name=nil, host=nil)
 		@provider = provider
@@ -599,31 +594,28 @@ class Wave
 		@host = host || provider.domain
 		
 		@deltas = {}
-		#@participants = []
+		@participants = []
+		@contents = []
+		@applied_to = 0
 		
 		self << FakeDelta.new(self)
+	end
+	
+	# Size of the wave's contents, strings are the number of bytes and everything
+	# else counts as one
+	def item_count
+		@contents.inject(0) do |total, item|
+			if item.is_a? String
+				next total + item.size
+			else
+				next total + 1
+			end
+		end
 	end
 	
 	# Returns a sorted list of all real deltas that this server has.
 	def real_deltas
 		@deltas.values.select{|delta| delta.is_a? Delta}.sort{|a, b| b.version <=> a.version}
-	end
-	
-	# Makes a list of the wave's participants by looping through the deltas.
-	#
-	# Please don't call this more than you have to, since each call re-builds the
-	# list.
-	def participants
-		participants = []
-		
-		real_deltas.reverse.each do |delta|
-			delta.operations.each do |op|
-				participants += op.who if op.is_a? AddUserOp
-				participants -= op.who if op.is_a? RemoveUserOp
-			end
-		end
-		
-		participants
 	end
 	
 	# Builds a wave path in the form of host/w+wave
@@ -660,5 +652,104 @@ class Wave
 	# Is the wave local?
 	def local?
 		@host == @provider.domain
+	end
+	
+	# Determines if the wave has a complete history
+	def complete?
+		@deltas.each_value do |delta|
+			return false if delta.is_a?(FakeDelta) && delta.version != 0
+		end
+		true
+	end
+	
+	def apply(delta=nil)
+		delta ||= self[@applied_to + 1]
+		#pp delta
+		#pp self
+		if !complete?
+			puts "The wave isn't complete; I can't apply a delta yet."
+		elsif delta.applied
+			puts "That delta is already applied."
+		else
+			if (delta.version - 1) > @applied_to
+				puts "Need to apply #{delta.version - @applied_to - 1} deltas first."
+				apply until @applied_to == delta.version - 1
+			end
+			
+			puts "Applying delta #{delta.version} to #{self.path}"
+			
+			delta.operations.each do |op|
+				@participants += op.who if op.is_a? AddUserOp
+				@participants -= op.who if op.is_a? RemoveUserOp
+				apply_mutate(op) if op.is_a? MutateOp
+			end
+			
+			@applied_to += 1
+			delta.applied = true
+		end
+	end
+	
+	protected
+	
+	# Apply a mutation. Does NO version checking!
+	#
+	# TODO: Handle mid-string stuff. Might add a whole class for mutations.
+	def apply_mutate(operation)
+		if operation.document_id != 'main'
+			puts "Non-main document: #{document}. ABORT"
+			p operation
+			exit
+		end
+		
+		item = 0 # in the 'contents' array
+		index = 0 # in a string
+		operation.components.each do |component|
+			if component[:retain_item_count]
+				advance = component[:retain_item_count]
+				until advance == 0
+					if !@contents[item].is_a?(String)
+						advance -= 1
+						item += 1
+						index = 0
+					elsif (@contents[item].size - index) <= advance
+						advance -= (@contents[item].size - index)
+						item += 1
+						index = 0
+					else # advance within current string
+						index += advance
+						advance = 0
+					end
+				end
+				puts "Advanced #{component[:retain_item_count]} items"
+			
+			elsif component[:element_start]
+				element = Element.new(component[:element_start][:type])
+				component[:element_start][:attributes].each do |attribute|
+					element.attributes[attribute[:key]] = attribute[:value]
+				end
+				
+				@contents.insert(item, element)
+				item += 1
+				index = 0
+			
+			elsif component[:element_end]
+				@contents.insert(item, :end)
+				item += 1
+				index = 0
+			
+			elsif component[:characters]
+				@contents.insert(item, component[:characters])
+				item += 1
+				index = 0
+			end
+		end
+	end
+end
+
+class Element
+	attr_accessor :type, :attributes
+	def initialize(type=nil)
+		@type = type
+		@attributes = {}
 	end
 end

@@ -2,15 +2,15 @@ class WavesController < ApplicationController
 	before_filter :require_user, :connect_remote
 
   def index
-		@address = "#{current_user.login}@danopia.net"
+		@address = "#{current_user.login}@newwave.danopia.net"
 		@waves = @remote.all_waves
   end
 
   def show
-		@address = "#{current_user.login}@danopia.net"
+		@address = "#{current_user.login}@newwave.danopia.net"
 		
 		if params[:id] == 'new'
-			@wave = Wave.new(@remote.provider, 'asdf')
+			@wave = Wave.new(@remote.provider, 'meep')
 			@remote << @wave
     	redirect_to wave_path(@wave.name)
 			return
@@ -21,30 +21,34 @@ class WavesController < ApplicationController
 		unless @wave.participants.include? @address
 			delta = Delta.new @wave, @address
 			delta.operations << AddUserOp.new(@address)
-			delta.operations << MutateOp.new('main', create_fedone_line(@address, "Hey there, this is #{@address}, and I'm using Ruby on Sails!"))
+    	@remote.add_delta @wave, delta
+    	
+			delta = Delta.new @wave, @address
+			delta.operations << MutateOp.new('main', create_fedone_line(@address, "Hey there, this is #{@address}, and I'm using Ruby on Sails!", @wave))
     	@remote.add_delta @wave, delta
     end
     
   end
 
   def update
-		@address = "#{current_user.login}@danopia.net"
+		@address = "#{current_user.login}@newwave.danopia.net"
 		
 		@wave = @remote[params[:id]]
 		
 		if @wave.participants.include? @address
 			delta = Delta.new @wave, @address
-			delta.operations << MutateOp.new('main', create_fedone_line(@address, params[:message]))
-    	render :text => @remote.add_delta(@wave, delta).inspect
-    	
-    	#redirect_to wave_path(@wave.name) + '#r' + delta.version.to_s
+			delta.operations << MutateOp.new('main', create_fedone_line(@address, params[:message], @wave))
+    	@remote.add_delta(@wave, delta)
+    	flash[:notice] = "Your message has been added."
     else
-    	render :text => 'fail.'
+    	flash[:error] = 'fail.'
     end
+    
+    redirect_to wave_path(@wave.name)
   end
 
   def remove
-		@address = "#{current_user.login}@danopia.net"
+		@address = "#{current_user.login}@newwave.danopia.net"
 		@wave = @remote[params[:id]]
 		
 		if !@wave.participants.include? @address
@@ -55,20 +59,49 @@ class WavesController < ApplicationController
 			delta = Delta.new @wave, @address
 			delta.operations << RemoveUserOp.new(params[:who])
     	@remote.add_delta(@wave, delta)
+    	flash[:notice] = "#{params[:who]} has been removed from the wave."
     end
     
-    redirect_to wave_path(@wave.name) + '#r' + delta.version.to_s
+    redirect_to wave_path(@wave.name)
+  end
+
+  def add
+		@address = "#{current_user.login}@newwave.danopia.net"
+		@wave = @remote[params[:id]]
+		
+		if !@wave.participants.include? @address
+    	flash[:error] = 'fail.'
+		elsif !params[:who] || @wave.participants.include?(params[:who])
+    	flash[:error] = "#{params[:who]} is already in this wave."
+    else
+			delta = Delta.new @wave, @address
+			delta.operations << AddUserOp.new(params[:who])
+    	@remote.add_delta(@wave, delta)
+    	flash[:notice] = "#{params[:who]} has been added to the wave."
+    end
+    
+    redirect_to wave_path(@wave.name)
   end
 
 	protected
 	
-	def create_fedone_line(author, text)
-		[{:element_start=>
-			{:type=>"line",
-			 :attributes=>
-				[{:value=>author, :key=>"by"}]}},
-		 {:element_end=>true},
-		 {:characters=>text}]
+	def create_fedone_line(author, text, wave)
+		if wave.item_count > 0
+			[{:retain_item_count=>wave.item_count},
+			 {:element_start=>
+				{:type=>"line",
+				 :attributes=>
+					[{:value=>author, :key=>"by"}]}},
+			 {:element_end=>true},
+			 {:characters=>text}]
+		else
+			[{:element_start=>
+				{:type=>"line",
+				 :attributes=>
+					[{:value=>author, :key=>"by"}]}},
+			 {:element_end=>true},
+			 {:characters=>text}]
+		end
 	end
 	
 	def connect_remote

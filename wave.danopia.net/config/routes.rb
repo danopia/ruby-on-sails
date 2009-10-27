@@ -4,6 +4,7 @@ ActionController::Routing::Routes.draw do |map|
 	#map.domain_wave 'waves/:domain/:id', :controller => 'waves', :action => 'show'
 	map.waves 'waves', :controller => 'waves', :action => 'index'
 	map.wave 'waves/:id', :controller => 'waves', :action => 'show'
+	
 	map.wave_add 'waves/:id/add', :controller => 'waves', :action => 'add'
 	map.wave_remove 'waves/:id/remove/:who', :controller => 'waves', :action => 'remove',
 	  :requirements => { :who => %r([^/;,?]+) }

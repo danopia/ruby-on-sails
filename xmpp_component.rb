@@ -175,7 +175,7 @@ Thread.new do
 end
 
 remote = SailsRemote.serve(provider)
-trap("INT") { remote.stop_service }
+trap("INT") { remote.stop_service; puts 'OBAI'; exit }
 puts "DRb server running at #{remote.uri}"
 
 puts 'Entering program loop'
@@ -241,7 +241,6 @@ until sock.closed?
 						delta = wave[version]
 						next unless delta.is_a? Delta
 						payload << "<item><applied-delta xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><![CDATA[#{encode64(delta.to_applied)}]]></applied-delta></item>"
-pp WaveProtoBuffer.parse(:applied_delta, delta.to_applied)
 					end
 					
 					payload << "<item><commit-notice xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" version=\"#{wave[node['end-version'].to_i].version}\"/></item>"
@@ -268,7 +267,6 @@ pp WaveProtoBuffer.parse(:applied_delta, delta.to_applied)
 					puts "Publish request from #{from} for one of my waves"
 					node = (packet/'publish/item/submit-request/delta').first
 					delta = Delta.parse(provider, node['wavelet-name'], decode64(node.inner_text))
-					pp delta
 					
 					sock.send_xml 'message', id, from, "<received xmlns=\"urn:xmpp:receipts\"/>"
 				end
@@ -330,9 +328,10 @@ pp WaveProtoBuffer.parse(:applied_delta, delta.to_applied)
 					puts "Got history for #{wave.name}"
 					
 					(packet/'pubsub/items/item/applied-delta').each do |update|
-						p decode64(update.inner_text)
+						#p decode64(update.inner_text)
 						delta = Delta.parse(provider, wave.conv_root_path, decode64(update.inner_text), true)
 						puts "Got a delta, version #{delta.version}"
+						wave.apply delta
 					end
 				end
 			
@@ -355,16 +354,19 @@ pp WaveProtoBuffer.parse(:applied_delta, delta.to_applied)
 					end
 					
 				elsif subtype == 'request'
+					wave = nil
 					(packet/'event/items/item/wavelet-update').each do |update|
 						delta = Delta.parse(provider, update['wavelet-name'], WaveProtoBuffer.parse(:applied_delta, decode64(update.inner_text)), true)
-						puts "Got a delta, version #{delta.version}"
-						
+						puts "Got delta version #{delta.version}"
 						wave = delta.wave
-						if wave.real_deltas.size != wave.deltas.size - 1
-							puts "Requesting more deltas"
-							id = sock.send_xml 'iq', 'get', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"0\" start-version-hash=\"#{encode64(wave[0].hash)}\" end-version=\"#{wave.newest_version}\" end-version-hash=\"#{encode64(wave.newest.hash)}\" wavelet-name=\"#{wave.conv_root_path}\"/></items></pubsub>"
-							ids[id] = wave
-						end
+					end
+					
+					if wave.complete?
+						wave.apply wave.newest
+					else
+						puts "Requesting more deltas"
+						id = sock.send_xml 'iq', 'get', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"0\" start-version-hash=\"#{encode64(wave[0].hash)}\" end-version=\"#{wave.newest_version}\" end-version-hash=\"#{encode64(wave.newest.hash)}\" wavelet-name=\"#{wave.conv_root_path}\"/></items></pubsub>"
+						ids[id] = wave
 					end
 					
 				end

@@ -1,10 +1,25 @@
 <h2>Wave: <%=h @wave.name %> (from <%=h @wave.host %>)</h2>
 
+<% unless @wave.complete? -%>
+<div class="error box">This wave currently has incomplete data. <%= @wave.complete? %></div>
+<% end -%>
+
 <p><em>Participants:</em>
 <% @wave.participants.each do |address| -%>
 <%=mail_to address %> (<%=link_to 'remove', wave_remove_path(@wave.name, address) %>)
 <% end -%>
+
+<%= form_tag wave_add_path(@wave.name) %>
+<%= text_field_tag "who" %><%= submit_tag "Add participant" %>
+</form>
+
 </p>
+
+<hr/>
+<p><strong>Contents</strong></p>
+<% @wave.contents.each do |item| -%>
+<p><%=h item.inspect %></p>
+<% end -%>
 
 <% @wave.real_deltas.each do |delta| %>
 <hr/>
@@ -27,7 +42,7 @@
 
 <%= form_tag wave_update_path(@wave.name) %>
 <%= text_field_tag "message" %>
-<br/><%= submit_tag "Add" %>
+<br/><%= submit_tag "Add FedOne line" %>
 </form>
 
 <p><%#=h @wave.digest %></p>
