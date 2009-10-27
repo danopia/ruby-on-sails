@@ -64,59 +64,165 @@ class SailsRemote
 end
 
 
-# Most popular class. Represents the local server and the waves on it, and
-# keeps a list of external certificates.
-class Provider
-	attr_accessor :certs, :cert_hash, :domain, :name, :waves, :sock
+# Represents a server, remote or local, and tracks certificates, waves, and the
+# queue of packets to send to a server once a connection is established.
+class Server
+	attr_accessor :provider, :certificate, :certificate_hash, :domain, :name, :waves, :queue, :state
 	
-	# Create a new provider.
-	def initialize(domain, subdomain='wave')
-		@certs = {}
-		@cert_hash = nil
+	# Create a new server.
+	def initialize(provider, domain, name=nil)
+		@provider = provider
+		@certificate = nil
+		@certificate_hash = nil
 		@domain = domain
-		@name = "#{subdomain}.#{domain}"
+		@name = name
 		@waves = {}
-		@sock = nil
-		
-		@letters = ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
-		@certs[domain] = open("#{domain}.cert").read.split("\n")[1..-2].join('')
+		@queue = []
+		@state = :uninited
 	end
 	
-	# Generate and return the certificate SHA2 hash in ASN.1/DER format, ready to
-	# send to remote servers.
-	def cert_hash
-		return @cert_hash if @cert_hash
-		@cert_hash = decode64(@certs[@domain])
-		@cert_hash = Digest::SHA2.digest "0\202\003\254#{@cert_hash}"
+	# Sets the certificate and generates a SHA2 hash in ASN.1/DER format, ready
+	# to send to remote servers.
+	def certificate=(certificate)
+		@certificate = certificate
+		@certificate_hash = Digest::SHA2.digest "0\202\003\254#{decode64(@certificate)}"
+	end
+	
+	def name=(new_name)
+		@provider.servers.delete @name.downcase unless @name == @domain
+		@provider.servers[new_name.downcase] = self
+		
+		@name = new_name
 	end
 	
 	# Return a wave.
 	#
-	# Can be passed in domain/w+name format for a certain wave, or w+name format
-	# to search all known waves.
+	# Must be passed only the name, i.e. you must pass "w+meep" to get meep. No
+	# domains will be handled.
 	def [](name)
 		return @waves[name] if @waves.has_key?(name)
-		
-		# allow fallback to not specifing a domain
-		waves = @waves.values.select{|wave|wave.name == name}
-		return nil if waves.empty?
-		waves.first
 	end
 	
-	# Add a wave to the main listing
-	def <<(wave)
-		@waves[wave.path] = wave
+	# Add a wave to the server's listing -or- queue/send a packet.
+	def <<(item)
+		if item.is_a? Array # packet
+			if @state == :ready
+				@provider.sock.send_xml item[0], item[1], @name, item[2]
+			else
+				@queue << item
+			end
+			
+		elsif item.is_a? Wave
+			@waves[item.name] = item
+			
+		else
+			0/0 # Yay for error handling
+		end
+	end
+	
+	# Send the queue out (state must be :ready)
+	def flush
+		return false unless @state == :ready && @provider.state == :ready
+		return nil unless @queue && @queue.any?
+		
+		@queue.each do |packet|
+			@provider.sock.send_xml packet[0], packet[1], @name, packet[2]
+		end
+		
+		@queue = nil
 	end
 	
 	# Generate a random alphanumeric string
-	def random_name(length=12)
+	def self.random_name(length=12)
+		@letters ||= ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
 		('' * length).map { @letters[rand * @letters.size] }.join('')
 	end
 	
 	# Create a unique wave name, accross all waves known to this server
 	def random_wave_name(length=12)
-		while name=random_name(length)
+		while name = Server.random_name(length)
 			return name unless self[name]
+		end
+	end
+end
+
+# Most popular class. Represents the local server and the waves on it, and
+# keeps a list of external servers.
+class Provider < Server
+	attr_accessor :sock, :servers
+	
+	# Create a new provider.
+	def initialize(domain, subdomain='wave')
+		super self, domain, "#{subdomain}.#{domain}"
+		
+		@sock = nil
+		@servers = {}
+		
+		self.certificate = open("#{@domain}.cert").read.split("\n")[1..-2].join('')
+	end
+	
+	# Return a wave.
+	#
+	# Can be passed in domain/w+name format for a certain wave, or name format
+	# to search all known waves.
+	def [](name)
+		if name =~ /^(.+)\/w\+(.+)$/
+			server = @servers[$1.downcase]
+			return nil unless server
+			server[$2]
+		else
+			# allow fallback to not specifing a domain, but search self first
+			return @waves[name] if @waves[name]
+			
+			@servers.values.each do |server|
+				wave = server[name]
+				return wave if wave
+			end
+			
+			nil
+		end
+	end
+	
+	# Add a wave to the main listing -or- Add a server to the main list
+	def <<(item)
+		if item.is_a? Server
+			@servers[item.domain] = item
+			init_server item if @state == :ready
+		
+		elsif item.is_a? Wave
+			server = @servers[item.host]
+			unless server
+				server = Server.new(self, item.host, item.host)
+				self << server
+			end
+			server << item
+			
+		else
+			0/0 # Yay for error handling
+		end
+	end
+	
+	# Init a Server connection by pinging it and sending a cert. Called for you
+	# if/when you << the Server to the Provider.
+	def init_server server
+		return unless @state == :ready
+		@sock.send_xml 'iq', 'get', server.name || server.domain,
+			'<query xmlns="http://jabber.org/protocol/disco#items"/>'
+		server.state = :sent_item_request
+	end
+	
+	# Flush all the remote servers.
+	def flush
+		return unless @state == :ready
+		
+		@servers.each_value do |server|
+			if server.state == :uninited
+				@sock.send_xml 'iq', 'get', server.name || server.domain,
+					'<query xmlns="http://jabber.org/protocol/disco#items"/>'
+				server.state = :sent_item_request
+			else
+				server.flush
+			end
 		end
 	end
 end
@@ -249,8 +355,15 @@ class Delta
 	# and the bytestring (doesn't handle Base64). It will handle adding the delta
 	# to a wave, creating the wave if it doesn't exist, and sending out the delta
 	# to any other servers that need it. (TODO: Only do this when local delta)
-	def self.parse provider, wavelet, data
-		data = WaveProtoBuffer.parse(:delta, data) if data.is_a? String
+	def self.parse provider, wavelet, data, applied=false
+		timestamp = nil
+		if applied
+			data = WaveProtoBuffer.parse(:applied_delta, data) if data.is_a? String
+			timestamp = data[:timestamp]
+			data = data[:signed_delta]
+		else
+			data = WaveProtoBuffer.parse(:delta, data) if data.is_a? String
+		end
 		
 		wavelet =~ /^(.+)\/w\+(.+)\/(.+)$/
 		wave_domain, wave_name, wavelet_name = $1, $2, $3
@@ -261,8 +374,6 @@ class Delta
 			wave = Wave.new provider, wave_name, wave_domain
 			provider << wave
 		end
-		
-		data = data[:signed_delta] if data[:signed_delta] # remove extra stuff if it's an applied delta
 		
 		version = data[:delta][:applied_to][:version] + 1
 		applied_to = wave[version - 1]
@@ -278,6 +389,7 @@ class Delta
 		
 		delta = Delta.new(wave, data[:delta][:author])
 		delta.version = version
+		delta.time = Time.at(timestamp / 1000) if timestamp
 		data[:delta][:operations].each do |operation|
 			type = operation.keys.first
 			details = operation.values.first
@@ -292,16 +404,20 @@ class Delta
 		end
 		
 		wave << delta
-		delta.propagate
+		delta.propagate(applied) unless applied
 		delta
 	end
 	
 	# Dumps the raw delta to a hash. Not ready to send out, but used for
 	# signing and hashing.
-	def delta_hash
+	def delta_data
 		{	:applied_to => prev_version,
 			:author => @author,
 			:operations => @operations.map{|op|op.to_hash}}
+	end
+	
+	def delta_raw
+		WaveProtoBuffer.encode(:delta, delta_data)
 	end
 	
 	# Helper method to return a hash of the previous version/hash.
@@ -315,17 +431,17 @@ class Delta
 	def signature
 		return @signature if @signature && @frozen
 		@@private_key ||= OpenSSL::PKey::RSA.new(File.open("../danopia.net.key").read)
-		@signature = @@private_key.sign OpenSSL::Digest::SHA1.new, raw
+		@signature = @@private_key.sign OpenSSL::Digest::SHA1.new, delta_raw
 	end
 	
 	# Get a non-"applied delta", ready to send to a wave's master server.
 	def to_s
 		return @to_s if @to_s && @frozen
 		@to_s = WaveProtoBuffer.encode(:signed_delta, {
-			:delta => raw,
+			:delta => delta_data,
 			:signature => {
 				:signature => signature,
-				:signer_id => @wave.provider.cert_hash,
+				:signer_id => @wave.provider.certificate_hash,
 				:signer_id_alg => 1 # 1 = RSA
 			}
 		})
@@ -350,7 +466,7 @@ class Delta
 	# Hash the delta, using SHA2 and trimming down the length of SHA1.
 	def hash
 		return @hash if @hash && @frozen
-		@hash = Digest::SHA2.digest("#{prev_hash}#{to_s}")[0,20]
+		@hash = Digest::SHA2.digest("#{prev_hash}#{to_applied}")[0,20]
 	end
 	
 	# Freeze the delta for optimal speed once there aren't going to be any more
@@ -370,7 +486,7 @@ class Delta
 	# Delta.parse.
 	#
 	# TODO: Handle each server better. (Queue, ping, etc.)
-	def propagate
+	def propagate applied=false
 		people = wave.participants
 		
 		# Tell people who were removed (is this right?)
@@ -393,13 +509,20 @@ class Delta
 		# Freeze and pre-render to make this faster, unless there's no targets
 		freeze
 		return if targets.empty?
-		packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(self.to_s)}]]></applied-delta></wavelet-update></item></items></event>"
+		packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(self.to_applied)}]]></applied-delta></wavelet-update></item></items></event>"
 		
 		p targets
+		
 		targets.uniq.each do |target|
-			@wave.provider.sock.send_xml 'iq', 'get', target, '<query xmlns="http://jabber.org/protocol/disco#items"/>'
-			sleep 5
-			@wave.provider.sock.send_xml 'message', 'normal', 'wave.' + target, packet
+			server = @wave.provider.servers[target.downcase]
+			
+			unless server
+				server = Server.new target.downcase
+				@wave.provider << server
+			end
+			
+			server << ['message', 'normal', packet]
+			p ['message', 'normal', packet]
 		end
 	end
 end

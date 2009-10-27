@@ -91,14 +91,10 @@ class ProtoBuffer
 
 	def self.encode(structure, hash)
 		structure = reverse_structures[structure] if structure.is_a? Symbol
-		output = ''
 		
-			puts
-			pp structure
-			pp hash
-			puts
-		
-		hash.each_pair do |type, value|
+		hash.to_a.map do |pair|
+			output = ''
+			type, value = pair
 			value = [value] unless value.is_a? Array
 			key = type
 			
@@ -126,7 +122,6 @@ class ProtoBuffer
 				elsif substructure == :string || arg.is_a?(String)
 					output << (key*8+2).chr
 					write_string output, arg
-					p "String: #{arg}"
 					
 				elsif substructure.is_a?(Hash) || substructure.is_a?(Symbol)
 					if substructure.is_a? Symbol
@@ -135,15 +130,14 @@ class ProtoBuffer
 					
 					output << (key*8+2).chr
 					write_string output, encode(substructure, arg)
-					p "Sub structure..."
 				
 				else
 					puts "Unknown type: #{type}"
 					return
 				end
 			end
-		end
-		output
+			output
+		end.sort{|a, b| a[0] <=> b[0]}.join('')
 	end
 
 	def self.write_varint(value)

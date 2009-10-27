@@ -53,8 +53,14 @@ class WavesController < ApplicationController
 	
 	def create_fedone_line(author, text)
 		#{2=>{2=>{0=>"main",1=> {0=>
-		[#"(\004",
-			{2=>{0=>"line", 1=>{0=>"by", 1=>author}}}," \001",
-			{1=>text}]#}}}}
+		#[#"(\004",
+		#	{2=>{0=>"line", 1=>{0=>"by", 1=>author}}}," \001",
+		#	{1=>text}]#}}}}
+		[{:element_start=>
+			{:type=>"line",
+			 :attributes=>
+				[{:value=>author, :key=>"by"}]}},
+		{:element_end=>true},
+		{:characters=>text}]
 	end	
 end
