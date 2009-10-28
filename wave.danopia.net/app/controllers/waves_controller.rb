@@ -2,13 +2,10 @@ class WavesController < ApplicationController
 	before_filter :require_user, :connect_remote
 
   def index
-		@address = "#{current_user.login}@newwave.danopia.net"
 		@waves = @remote.all_waves
   end
 
   def show
-		@address = "#{current_user.login}@newwave.danopia.net"
-		
 		if params[:id] == 'new'
 			@wave = Wave.new(@remote.provider, random_name)
 			@remote << @wave
@@ -31,8 +28,6 @@ class WavesController < ApplicationController
   end
 
   def update
-		@address = "#{current_user.login}@newwave.danopia.net"
-		
 		@wave = @remote[params[:id]]
 		
 		if @wave.participants.include? @address
@@ -48,7 +43,6 @@ class WavesController < ApplicationController
   end
 
   def remove
-		@address = "#{current_user.login}@newwave.danopia.net"
 		@wave = @remote[params[:id]]
 		
 		if !@wave.participants.include? @address
@@ -66,7 +60,6 @@ class WavesController < ApplicationController
   end
 
   def add
-		@address = "#{current_user.login}@newwave.danopia.net"
 		@wave = @remote[params[:id]]
 		
 		if !@wave.participants.include? @address
@@ -105,9 +98,12 @@ class WavesController < ApplicationController
 	end
 	
 	def connect_remote
-		return if @remote
-		@remote = SailsRemote.connect
-		DRb.start_service
+		unless @remote
+			@remote = SailsRemote.connect
+			DRb.start_service
+		end
+		
+		@address = "#{current_user.login}@#{@remote.provider.domain}"
 	end
 	
 	def random_name(length=12)

@@ -391,6 +391,7 @@ class Delta
 			data = WaveProtoBuffer.parse(:signed_delta, data) if data.is_a? String
 		end
 		
+		wavelet.sub! 'wave://', ''
 		wavelet =~ /^(.+)\/w\+(.+)\/(.+)$/
 		wave_domain, wave_name, wavelet_name = $1, $2, $3
 		puts "Parsing #{wave_domain}'s #{wavelet_name} wavelet for w+#{wave_name}"
@@ -572,6 +573,7 @@ class Delta
 			freeze
 			@wave.provider.servers[@wave.host] << ['iq', 'set', 
 				"<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"wavelet\"><item><submit-request xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><delta wavelet-name=\"#{@wave.conv_root_path}\"><![CDATA[#{encode64(self.to_s)}]]></delta></submit-request></item></publish></pubsub>"]
+			puts "Queued a packet for #{@wave.host}"
 		end
 	end
 	

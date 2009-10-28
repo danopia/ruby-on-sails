@@ -114,27 +114,27 @@ provider << wave
 
 wave = Wave.new(provider, 'ASDFASDFASDF')
 
-delta = Delta.new(wave, "me@newwave.danopia.net")
-delta.operations << AddUserOp.new('me@newwave.danopia.net') # Add myself to the conv_root_path
+delta = Delta.new(wave, "me@danopia.net")
+delta.operations << AddUserOp.new('me@danopia.net') # Add myself to the conv_root_path
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@newwave.danopia.net")
+delta = Delta.new(wave, "me@danopia.net")
 delta.operations << AddUserOp.new('echoe@danopia.net') # Add an echoey to the wave
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@newwave.danopia.net")
+delta = Delta.new(wave, "me@danopia.net")
 delta.operations << RemoveUserOp.new('echoe@danopia.net')
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@newwave.danopia.net")
+delta = Delta.new(wave, "me@danopia.net")
 delta.operations << AddUserOp.new('echoey@danopia.net')
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@newwave.danopia.net")
+delta = Delta.new(wave, "me@danopia.net")
 delta.operations << AddUserOp.new('danopia@danopia.net')
 delta.propagate # !
 wave << delta
@@ -236,6 +236,7 @@ until sock.closed?
 					node = (packet/'pubsub/items/delta-history').first
 					node['wavelet-name'] =~ /^(.+)\/w\+(.+)\/(.+)$/
 					wave_domain, wave_name, wavelet_name = $1, $2, $3
+					wave_domain.sub!('wave://', '')
 					
 					wave = provider["#{wave_domain}/w+#{wave_name}"]
 					payload = ''
