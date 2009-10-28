@@ -10,7 +10,7 @@ class WavesController < ApplicationController
 		@address = "#{current_user.login}@newwave.danopia.net"
 		
 		if params[:id] == 'new'
-			@wave = Wave.new(@remote.provider, 'meep')
+			@wave = Wave.new(@remote.provider, random_name)
 			@remote << @wave
     	redirect_to wave_path(@wave.name)
 			return
@@ -108,5 +108,10 @@ class WavesController < ApplicationController
 		return if @remote
 		@remote = SailsRemote.connect
 		DRb.start_service
+	end
+	
+	def random_name(length=12)
+		@letters ||= ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
+		([''] * length).map { @letters[rand * @letters.size] }.join('')
 	end
 end

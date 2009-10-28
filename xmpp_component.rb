@@ -181,15 +181,10 @@ puts "DRb server running at #{remote.uri}"
 puts 'Entering program loop'
 
 ids = {} # used for history requests
-ready = false
+incomplete = ''
 until sock.closed?
-	if ready
-		message = '<message from="wave.fedone.ferrum-et-magica.de" to="wave.danopia.net" type="normal" id="8390-18"><request xmlns="urn:xmpp:receipts"/><event xmlns="http://jabber.org/protocol/pubsub#event"><items><item><wavelet-update xmlns="http://waveprotocol.org/protocol/0.2/waveserver" wavelet-name="fedone.ferrum-et-magica.de/w+P6MKjCO7yjGk/conv+root"><applied-delta>CrECCoQBChgIAhIUPWoUvFBWI4FDvkx8AW1uoEvykwYSH211cmtAZmVkb25lLmZlcnJ1bS1ldC1tYWdpY2EuZGUaRxpFCgRtYWluEj0KLxotCgRsaW5lEiUKAmJ5Eh9tdXJrQGZlZG9uZS5mZXJydW0tZXQtbWFnaWNhLmRlCgIgAQoGEgRoZWxwEqcBCoABAufyO9HjYzlmz+LoUiF6OdvTbREceK0zzZ49yUfiOKhFMJLsQKmNMPzAS54Laoh+QoA0YI5uTGyOQV4dXRgs0qaandWuU3WtEepgl7XX0ZPCTqTiBlObWtUa2+eljLK/KoSMaVQ7pNHfW1RI+P9ww7eOVzbJy2LSbq5X/jwCB2oSIJ+nDylQQHNfFOiRVLIoyGbJizNr0JcFtkSZHOyZFRsKGAESGAgCEhQ9ahS8UFYjgUO+THwBbW6gS/KTBhgBIJ+E+7bIJA==</applied-delta></wavelet-update></item></items></event></message>'
-		ready = false
-	else
-		message = sock.recv 10000
+	message = incomplete + sock.recv(10000)
 	puts "Recieved: \e[33m#{message}\e[0m"
-	end
 	
 	if !message || message.empty?
 		puts 'Connection closed.'
@@ -201,10 +196,17 @@ until sock.closed?
 		exit
 	end
 	
-	doc = Hpricot("<packet>#{message}</packet>")
+	doc = Hpricot("<packet>#{message}<done/></packet>")
+	
+	if (doc/'packet/done').empty? # Didn't get the whole packet
+		incomplete = message
+		next
+	end
+	incomplete = ''
 	
 	doc.root.children.each do |packet|
 		name = packet.name
+		next if name == 'done'
 		
 		if name == 'handshake'
 			puts "Connected to XMPP."

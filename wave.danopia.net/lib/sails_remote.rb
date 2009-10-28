@@ -140,7 +140,7 @@ class Server
 	# Generate a random alphanumeric string
 	def self.random_name(length=12)
 		@letters ||= ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
-		('' * length).map { @letters[rand * @letters.size] }.join('')
+		([''] * length).map { @letters[rand * @letters.size] }.join('')
 	end
 	
 	# Create a unique wave name, accross all waves known to this server
@@ -371,10 +371,10 @@ class Delta
 		@author = author
 		@version = wave.newest_version + 1
 		@operations = []
-		@time = Time.now
+		@time = Time.now.to_i * 1000
 		@applied = false
 		@frozen = false
-		@signer_id || wave.provider.certificate_hash
+		@signer_id = wave.provider.certificate_hash
 	end
 	
 	# Parses an incoming delta, taking the wavelet name (from the XML attribute)
@@ -384,7 +384,7 @@ class Delta
 	def self.parse provider, wavelet, data, applied=false
 		timestamp = nil
 		if applied
-			WaveProtoBuffer.parse(:applied_delta, data) if data.is_a? String
+			data = WaveProtoBuffer.parse(:applied_delta, data) if data.is_a? String
 			timestamp = data[:timestamp]
 			data = data[:signed_delta]
 		else
@@ -415,7 +415,8 @@ class Delta
 		
 		delta = Delta.new(wave, data[:delta][:author])
 		delta.version = version
-		delta.time = Time.at(timestamp / 1000) if timestamp
+		#delta.time = Time.at(timestamp / 1000) if timestamp
+		delta.time = timestamp if timestamp
 		delta.signature = data[:signature][:signature]
 		delta.signer_id = data[:signature][:signer_id]
 		
@@ -438,8 +439,6 @@ class Delta
 		else
 			delta.propagate(applied)
 		end
-		
-		puts "Delta #{delta.version}'s applied_to hash is #{data[:delta][:applied_to][:hash].inspect} and the actual previous hash is #{applied_to.hash.inspect}"
 		
 		delta
 	end
@@ -468,9 +467,9 @@ class Delta
 		return @signature if @signature
 		@@private_key ||= OpenSSL::PKey::RSA.new(File.open("../danopia.net.key").read)
 		if @frozen
-			@signature = @@private_key.sign OpenSSL::Digest::SHA1.new, delta_raw
+			return @signature = @@private_key.sign(OpenSSL::Digest::SHA1.new, delta_raw)
 		else
-			@@private_key.sign OpenSSL::Digest::SHA1.new, delta_raw
+			return @@private_key.sign(OpenSSL::Digest::SHA1.new, delta_raw)
 		end
 	end
 	
@@ -494,7 +493,7 @@ class Delta
 			:signed_delta => to_s,
 			:applied_to => prev_version,
 			:operations_applied => @operations.size, # operations applied
-			:timestamp => @time.to_i * 1000 # milliseconds not needed yet
+			:timestamp => @time#.to_i * 1000 # milliseconds not needed yet
 		})
 	end
 	
@@ -519,7 +518,7 @@ class Delta
 		@hash = nil
 		@to_s = nil
 		@to_applied = nil
-		@signature = nil
+		#@signature = nil
 	end
 	
 	# Send the delta out to remote servers. Called by SailsRemote#add_delta and
