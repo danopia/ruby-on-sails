@@ -16,33 +16,34 @@
 </p>
 
 <hr/>
-<p><strong>Contents</strong></p>
+<p><strong><a name="contents">Contents</a></strong></p>
 <% @wave.contents.each do |item| -%>
-<p><%=h item.inspect %></p>
+<% if item.is_a?(Element) %>
+<p>&lt;<%=h item.attributes['by'] %>&gt;
+<% elsif item.is_a?(String) %>
+<%=h item %></p>
+<% end -%>
 <% end -%>
 
-<% @wave.real_deltas.each do |delta| %>
-<hr/>
+<%= form_tag wave_update_path(@wave.name) %>
+	<%= text_field_tag "message" %>
+	<%= submit_tag "Add FedOne line" %>
+</form>
 
-<p><%=h delta.author %> commited <a name="r<%=h delta.version %>">r<%=h delta.version %></a>:</p>
+<hr/>
+<p><strong>History</strong></p>
+
+<% @wave.real_deltas.each do |delta| %>
+
+<p><%=h delta.author %> added <a name="r<%=h delta.version %>">r<%=h delta.version %></a>:
 
 <% delta.operations.each do |operation| -%>
 <% if operation.is_a?(AddUserOp) || operation.is_a?(RemoveUserOp) -%>
-<p><em><%=h operation.to_s %></em></p>
+<em><%=h operation.to_s %></em>
 <% elsif operation.is_a? MutateOp -%>
-<blockquote><p><%=h operation.to_s %></em></p></blockquote>
+<%=h operation.to_s %>
 <% end -%>
-<% end -%>
-
-<!--p><%=h delta.operations.first.inspect %></p-->
-
+</p>
 <% end -%>
 
-<hr/>
-
-<%= form_tag wave_update_path(@wave.name) %>
-<%= text_field_tag "message" %>
-<br/><%= submit_tag "Add FedOne line" %>
-</form>
-
-<p><%#=h @wave.digest %></p>
+<% end -%>

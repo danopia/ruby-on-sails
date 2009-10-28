@@ -36,10 +36,10 @@ class WavesController < ApplicationController
     	@remote.add_delta(@wave, delta)
     	flash[:notice] = "Your message has been added."
     else
-    	flash[:error] = 'fail.'
+    	flash[:error] = 'You aren\'t in that wave.'
     end
     
-    redirect_to wave_path(@wave.name)
+    redirect_to wave_path(@wave.name) + '#contents'
   end
 
   def remove

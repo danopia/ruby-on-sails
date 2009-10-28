@@ -11,7 +11,7 @@
 <% end -%>
 
 <p><em>Participants:</em> <%=h wave.participants.join(', ') %></p>
-<p><em>Digest:</em> (not implemented)<%#=h wave.digest %></p>
+<p><em>Digest:</em> <%=h wave.contents.select{|item| item.is_a? String}.join(', ') %></p>
 
 <p>Have <%=h wave.deltas.size %> updates</p>
 
