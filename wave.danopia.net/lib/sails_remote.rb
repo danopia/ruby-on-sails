@@ -656,9 +656,21 @@ class Wave
 	end
 	
 	# Determines if the wave has a complete history
-	def complete?
+	#
+	# Pass true as the argument to request more history if incomplete; pass a
+	# Hash and it'll set key packet-id to the current Wave.
+	def complete?(request_more=false)
 		@deltas.each_value do |delta|
-			return false if delta.is_a?(FakeDelta) && delta.version != 0
+			if delta.is_a?(FakeDelta) && delta.version != 0
+			
+				if request_more
+					puts "Requesting more deltas for #{self.path}"
+					id = @provider.sock.send_xml 'iq', 'get', self.host, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"0\" start-version-hash=\"#{encode64(self[0].hash)}\" end-version=\"#{self.newest_version}\" end-version-hash=\"#{encode64(self.newest.hash)}\" wavelet-name=\"#{self.conv_root_path}\"/></items></pubsub>"
+					request_more[id] = wave if request_more.is_a? Hash
+				end
+				
+				return false
+			end
 		end
 		true
 	end

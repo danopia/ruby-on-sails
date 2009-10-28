@@ -14,8 +14,6 @@ require 'yaml'
 require 'wave_proto'
 require 'wave.danopia.net/lib/sails_remote'
 
-sleep 2
-
 def encode64(data)
 	Base64.encode64(data).gsub("\n", '')
 end
@@ -60,25 +58,25 @@ sock.provider = provider
 
 wave = Wave.new(provider, 'R0PIDtU751vF')
 
-delta = Delta.new(wave, "me@danopia.net")
-delta.operations << AddUserOp.new("me@danopia.net")
+delta = Delta.new(wave, "me@#{provider.domain}")
+delta.operations << AddUserOp.new("me@#{provider.domain}")
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@danopia.net")
-delta.operations << AddUserOp.new("test@danopia.net")
+delta = Delta.new(wave, "me@#{provider.domain}")
+delta.operations << AddUserOp.new("test@#{provider.domain}")
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@danopia.net")
+delta = Delta.new(wave, "me@#{provider.domain}")
 delta.operations << MutateOp.new('main', ["(\004",
-			{2=>{0=>"line", 1=>{0=>"by", 1=>'me@danopia.net'}}}," \001",
+			{2=>{0=>"line", 1=>{0=>"by", 1=>"me@#{provider.domain}"}}}," \001",
 			{1=>"This is a test."}])
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@danopia.net")
-delta.operations << RemoveUserOp.new("test@danopia.net")
+delta = Delta.new(wave, "me@#{provider.domain}")
+delta.operations << RemoveUserOp.new("test@#{provider.domain}")
 delta.freeze
 wave << delta
 
@@ -88,22 +86,22 @@ provider << wave
 
 wave = Wave.new(provider, 'BHW1z9FOWKua')
 
-delta = Delta.new(wave, "me@danopia.net")
-delta.operations << AddUserOp.new('me@danopia.net') # Add myself to the conv_root_path
+delta = Delta.new(wave, "me@#{provider.domain}")
+delta.operations << AddUserOp.new("me@#{provider.domain}") # Add myself to the conv_root_path
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@danopia.net")
+delta = Delta.new(wave, "me@#{provider.domain}")
 delta.operations << AddUserOp.new('echoe@killerswan.com') # Add an echoey to the wave
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@danopia.net")
+delta = Delta.new(wave, "me@#{provider.domain}")
 delta.operations << RemoveUserOp.new('echoe@killerswan.com')
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@danopia.net")
+delta = Delta.new(wave, "me@#{provider.domain}")
 delta.operations << AddUserOp.new('echoey@killerswan.com')
 delta.freeze
 wave << delta
@@ -114,28 +112,28 @@ provider << wave
 
 wave = Wave.new(provider, 'ASDFASDFASDF')
 
-delta = Delta.new(wave, "me@danopia.net")
-delta.operations << AddUserOp.new('me@danopia.net') # Add myself to the conv_root_path
+delta = Delta.new(wave, "me@#{provider.domain}")
+delta.operations << AddUserOp.new("me@#{provider.domain}") # Add myself to the conv_root_path
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@danopia.net")
+delta = Delta.new(wave, "me@#{provider.domain}")
 delta.operations << AddUserOp.new('echoe@danopia.net') # Add an echoey to the wave
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@danopia.net")
+delta = Delta.new(wave, "me@#{provider.domain}")
 delta.operations << RemoveUserOp.new('echoe@danopia.net')
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@danopia.net")
+delta = Delta.new(wave, "me@#{provider.domain}")
 delta.operations << AddUserOp.new('echoey@danopia.net')
 delta.freeze
 wave << delta
 
-delta = Delta.new(wave, "me@danopia.net")
-delta.operations << AddUserOp.new('danopia@danopia.net')
+delta = Delta.new(wave, "me@#{provider.domain}")
+delta.operations << AddUserOp.new("danopia@#{provider.domain}")
 delta.propagate # !
 wave << delta
 
@@ -256,9 +254,9 @@ until sock.closed?
 				if (packet/'certificate').any?
 					puts "Got a cert from #{from}"
 					
-					server = provider[from.downcase]
+					server = provider.servers[from.downcase]
 					unless server
-						server = Server.new(from.downcase, from.downcase)
+						server = Server.new(provider, (packet/'signature')['domain'], from.downcase)
 						provider << server
 					end
 					
@@ -330,47 +328,53 @@ until sock.closed?
 					ids.delete id
 					puts "Got history for #{wave.name}"
 					
+					delta = nil
 					(packet/'pubsub/items/item/applied-delta').each do |update|
-						#p decode64(update.inner_text)
 						delta = Delta.parse(provider, wave.conv_root_path, decode64(update.inner_text), true)
 						puts "Got a delta, version #{delta.version}"
-						wave.apply delta
 					end
+					
+					wave.apply delta if delta # apply the latest only for less output
 				end
 			
 			when [:message, :normal], [:message, :none]
-				subtype = packet.children.first.name
-				
-				if subtype == 'received'
-					server = provider.servers[from.downcase]
-					if !server
-						puts "Unknown server."
-					
-					elsif server.state == :details
-						server.state = :ponged
-						puts "#{from} ponged, attempting to send my cert (state = :ponged)"
+				packet.children.each do |message|
+					subtype = message.name
+					if subtype == 'received'
+						server = provider.servers[from.downcase]
+						if !server
+							puts "Unknown server."
 						
-						sock.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{provider.certificate}]]></certificate></signature></item></publish></pubsub>"
+						elsif server.state == :details
+							server.state = :ponged
+							puts "#{from} ponged, attempting to send my cert (state = :ponged)"
+							
+							sock.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{provider.certificate}]]></certificate></signature></item></publish></pubsub>"
+						
+						else
+							puts "#{from} ACK'ed our previous packet."
+						end
+						
+					elsif subtype == 'request'
 					
-					else
-						puts "#{from} ACK'ed our previous packet."
+						if (packet/'event/items/item/wavelet-update').any?
+							wave = nil
+							(packet/'event/items/item/wavelet-update').each do |update|
+								delta = Delta.parse(provider, update['wavelet-name'], decode64(update.inner_text), true)
+								puts "Got delta version #{delta.version}"
+								wave = delta.wave
+							end
+							
+							wave.apply(wave.newest) if wave.complete?(ids)
+						end
+						
+						sock.send_xml 'message', 'normal', from, '<received xmlns="urn:xmpp:receipts"/>', id
+						
+					elsif subtype == 'ping'
+						puts "Got a ping from #{from}"
+					
 					end
 					
-				elsif subtype == 'request'
-					wave = nil
-					(packet/'event/items/item/wavelet-update').each do |update|
-						delta = Delta.parse(provider, update['wavelet-name'], WaveProtoBuffer.parse(:applied_delta, decode64(update.inner_text)), true)
-						puts "Got delta version #{delta.version}"
-						wave = delta.wave
-					end
-					
-					if wave.complete?
-						wave.apply wave.newest
-					else
-						puts "Requesting more deltas"
-						id = sock.send_xml 'iq', 'get', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"0\" start-version-hash=\"#{encode64(wave[0].hash)}\" end-version=\"#{wave.newest_version}\" end-version-hash=\"#{encode64(wave.newest.hash)}\" wavelet-name=\"#{wave.conv_root_path}\"/></items></pubsub>"
-						ids[id] = wave
-					end
 					
 				end
 			
