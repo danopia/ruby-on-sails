@@ -1,6 +1,6 @@
-<h1>Login</h1>
+<h2>Login to Sails</h2>
 
-<% form_for @user_session, :url => '/login' do |f| %>
+<% form_for @user_session, :url => login_path do |f| %>
   <%= f.error_messages %>
   <%= f.label :login %><br />
   <%= f.text_field :login %><br />
@@ -12,3 +12,5 @@
   <br />
   <%= f.submit "Login" %>
 <% end %>
+
+<p>Don't have an account? You might want to try <%=link_to 'creating one', new_account_path %>.</p>

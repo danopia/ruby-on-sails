@@ -52,4 +52,13 @@ class ApplicationController < ActionController::Base
 		return @current_user if defined?(@current_user)
 		@current_user = current_user_session && current_user_session.user
 	end
+	
+	def connect_remote
+		unless @remote
+			@remote = SailsRemote.connect
+			DRb.start_service
+		end
+		
+		@address = "#{current_user.login}@#{@remote.provider.domain}"
+	end
 end

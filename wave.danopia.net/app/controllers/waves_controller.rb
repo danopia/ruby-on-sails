@@ -97,15 +97,6 @@ class WavesController < ApplicationController
 		end
 	end
 	
-	def connect_remote
-		unless @remote
-			@remote = SailsRemote.connect
-			DRb.start_service
-		end
-		
-		@address = "#{current_user.login}@#{@remote.provider.domain}"
-	end
-	
 	def random_name(length=12)
 		@letters ||= ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
 		([''] * length).map { @letters[rand * @letters.size] }.join('')

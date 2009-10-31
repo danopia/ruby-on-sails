@@ -1,37 +1,31 @@
+<div style="float:left; margin: 1em;">
+  <%=image_tag gravatar(@user.email, 150), :alt => "#{h @user.login}'s Gravatar" %>
+</div>
+
 <p>
-  <b>Login:</b>
+  <b>Display name:</b>
+  <%=h @user.display_name %>
+</p>
+
+<p>
+  <b>Username:</b>
   <%=h @user.login %>
 </p>
 
 <p>
-  <b>Login count:</b>
-  <%=h @user.login_count %>
+  <b>Wave address:</b>
+  <%=h @user.login %>@<%=h @remote.provider.domain %>
 </p>
 
 <p>
-  <b>Last request at:</b>
-  <%=h @user.last_request_at %>
+  <b>Email address:</b>
+  <%=mail_to @user.email %>
 </p>
 
 <p>
-  <b>Last login at:</b>
-  <%=h @user.last_login_at %>
+  
 </p>
 
-<p>
-  <b>Current login at:</b>
-  <%=h @user.current_login_at %>
-</p>
+<br clear="both"/>
 
-<p>
-  <b>Last login ip:</b>
-  <%=h @user.last_login_ip %>
-</p>
-
-<p>
-  <b>Current login ip:</b>
-  <%=h @user.current_login_ip %>
-</p>
-
-
-<%= link_to 'Edit', edit_account_path %>
+<%= link_to 'Back', users_path %>
