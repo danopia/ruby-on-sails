@@ -35,17 +35,20 @@ end
 def sock.ids
 	@ids ||= {}
 end
+def sock.rand_id
+	"#{(rand*10000).to_i}-#{(rand*100).to_i}"
+end
 def sock.send_raw(packet)
 	$stdout.puts "Sent: \e[2;34m#{packet}\e[0m" if packet.size > 1
 	print packet
 	packet
 end
 def sock.send_xml(name, type, to, contents, id=nil)
-	if type.to_i > 0
+	if type.to_i > 0 || type =~ /^purple.+/
 		id = type
 		type = 'result'
 	else
-		id ||= "#{(rand*10000).to_i}-#{(rand*100).to_i}"
+		id ||= rand_id
 	end
 	
 	ids[id] = send_raw("<#{name} type=\"#{type}\" id=\"#{id}\" to=\"#{to}\" from=\"#{@provider.name}\">#{contents}</#{name}>")
@@ -228,7 +231,7 @@ until sock.closed?
 						sock.send_xml 'iq', id, from, "<query xmlns=\"http://jabber.org/protocol/disco#info\"><identity category=\"collaboration\" type=\"google-wave\" name=\"#{config['identity']}\"/><feature var=\"http://waveprotocol.org/protocol/0.2/waveserver\"/></query>"
 					end
 					
-				elsif (packet/'pubsub').any?
+				elsif (packet/'pubsub/items/delta-history').any?
 					puts "#{from} requested some deltas"
 					
 					node = (packet/'pubsub/items/delta-history').first
@@ -248,6 +251,40 @@ until sock.closed?
 					payload << "<item><history-truncated xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" version=\"#{wave[node['end-version'].to_i].version}\"/></item>"
 					
 					sock.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items>#{payload}</items></pubsub>"
+					
+				elsif (packet/'pubsub/items/signer-request').any?
+					puts "#{from} requested a certificate"
+					
+					node = (packet/'pubsub/items/signer-request').first
+					p node['wavelet-name'] =~ /^(.+)\/w\+(.+)\/(.+)$/
+					wave_domain, wave_name, wavelet_name = $1, $2, $3
+					wave_domain.sub!('wave://', '')
+					
+					wave = provider["#{wave_domain}/w+#{wave_name}"]
+					if wave
+						delta = wave[node['version'].to_i]
+						
+						domain = nil
+						domain = $1 if delta && delta.author =~ /^.+@(.+)$/
+						
+						if !delta
+							puts 'Unknown delta.'
+							
+						elsif !domain
+							puts 'Unknown domain for that delta.'
+							
+						elsif delta.signer_id == decode64(node['signer-id']) && delta.hash == decode64(node['history-hash'])
+							puts "Sending a cert to #{from} on request, for #{wave.path}"
+							
+							sock.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{provider.certificate}]]></certificate></signature></items></pubsub>"
+							
+						else
+							puts 'Delta signer/hash doesn\'t match the request.'
+						end
+					else
+						puts 'Unknown wave.'
+					end
+					
 				end
 				
 			when [:iq, :set]
@@ -256,7 +293,7 @@ until sock.closed?
 					
 					server = provider.servers[from.downcase]
 					unless server
-						server = Server.new(provider, (packet/'signature')['domain'], from.downcase)
+						server = Server.new(provider, (packet/'signature').first['domain'], from.downcase)
 						provider << server
 					end
 					
@@ -376,6 +413,28 @@ until sock.closed?
 					end
 					
 					
+				end
+				
+			when [:iq, :error]
+				if (packet/'remote-server-not-found').any?
+				
+					server = provider.servers[from.downcase]
+					if server
+						if "wave.#{server.domain}" == server.name
+							puts "Already tried the wave. trick on #{from}. (state = :error)"
+							server.state = :error
+						else
+							puts "Trying the wave. trick on #{from}. (state = :listing)"
+							server.name = "wave.#{server.domain}"
+							server.state = :listing
+							sock.send_xml 'iq', 'get', server.name, '<query xmlns="http://jabber.org/protocol/disco#info"/>'
+						end
+					else
+						puts 'Unknown server.'
+					end
+					
+				else
+					puts 'ERROR!'
 				end
 			
 			else

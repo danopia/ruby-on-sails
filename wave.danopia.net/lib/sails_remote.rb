@@ -91,6 +91,7 @@ class Server
 	def certificate=(certificate)
 		@certificate = certificate
 		@certificate_hash = Digest::SHA2.digest "0\202\003\254#{decode64(@certificate)}"
+		p @certificate_hash
 	end
 	
 	def name=(new_name)
@@ -112,7 +113,7 @@ class Server
 	def <<(item)
 		if item.is_a? Array # packet
 			if @state == :ready
-				@provider.sock.send_xml item[0], item[1], @name, item[2]
+				@provider.sock.send_xml item[0], item[1], @name, item[2], item[3]
 			else
 				@queue << item
 			end
@@ -131,7 +132,7 @@ class Server
 		return nil unless @queue && @queue.any?
 		
 		@queue.each do |packet|
-			@provider.sock.send_xml packet[0], packet[1], @name, packet[2]
+			@provider.sock.send_xml packet[0], packet[1], @name, packet[2], packet[3]
 		end
 		
 		@queue = nil
@@ -375,6 +376,8 @@ class Delta
 		@applied = false
 		@frozen = false
 		@signer_id = wave.provider.certificate_hash
+		puts 'a'
+		p @signer_id
 	end
 	
 	# Parses an incoming delta, taking the wavelet name (from the XML attribute)
@@ -384,7 +387,9 @@ class Delta
 	def self.parse provider, wavelet, data, applied=false
 		timestamp = nil
 		if applied
+			p data
 			data = WaveProtoBuffer.parse(:applied_delta, data) if data.is_a? String
+			p data
 			timestamp = data[:timestamp]
 			data = data[:signed_delta]
 		else
@@ -412,7 +417,7 @@ class Delta
 			wave << applied_to
 		end
 		
-		return wave[version] if wave[version].is_a? Delta
+		#return wave[version] if wave[version].is_a? Delta
 		
 		delta = Delta.new(wave, data[:delta][:author])
 		delta.version = version
@@ -433,6 +438,7 @@ class Delta
 					delta.operations << MutateOp.parse(details)
 			end
 		end
+			p delta.to_applied
 		
 		wave << delta
 		if applied
@@ -466,7 +472,7 @@ class Delta
 	# on the provider, not in Delta.
 	def signature
 		return @signature if @signature
-		@@private_key ||= OpenSSL::PKey::RSA.new(File.open("../danopia.net.key").read)
+		@@private_key ||= OpenSSL::PKey::RSA.new(File.open("#{@wave.provider.domain}.key").read)
 		if @frozen
 			return @signature = @@private_key.sign(OpenSSL::Digest::SHA1.new, delta_raw)
 		else
@@ -565,8 +571,8 @@ class Delta
 					@wave.provider << server
 				end
 				
+				puts "Handing off a packet for #{server.name}"
 				server << ['message', 'normal', packet]
-				puts "Queued a packet for #{server.name}"
 			end
 	
 		else # Then it's remote; send out the request
@@ -665,8 +671,16 @@ class Wave
 			
 				if request_more
 					puts "Requesting more deltas for #{self.path}"
-					id = @provider.sock.send_xml 'iq', 'get', self.host, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"0\" start-version-hash=\"#{encode64(self[0].hash)}\" end-version=\"#{self.newest_version}\" end-version-hash=\"#{encode64(self.newest.hash)}\" wavelet-name=\"#{self.conv_root_path}\"/></items></pubsub>"
-					request_more[id] = wave if request_more.is_a? Hash
+					
+					server = @provider.servers[@host]
+					unless server
+						server = Server.new(@provider, @host, @host)
+						@provider << server
+					end
+					
+					id = @provider.sock.rand_id
+					server << ['iq', 'get', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"0\" start-version-hash=\"#{encode64(self[0].hash)}\" end-version=\"#{self.newest_version}\" end-version-hash=\"#{encode64(self.newest.hash)}\" wavelet-name=\"#{self.conv_root_path}\"/></items></pubsub>", id]
+					request_more[id] = self if request_more.is_a? Hash
 				end
 				
 				return false
