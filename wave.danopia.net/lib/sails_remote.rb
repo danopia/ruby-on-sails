@@ -435,11 +435,8 @@ class Delta
 		end
 		
 		wave << delta
-		if applied
-			wave.apply delta
-		else
-			delta.propagate(applied)
-		end
+		
+		delta.propagate(applied) unless applied
 		
 		delta
 	end
@@ -528,7 +525,7 @@ class Delta
 	# TODO: Handle each server better. (Queue, ping, etc.)
 	def propagate applied=false
 		if @wave.local?
-			wave.apply self
+			wave.playback.apply self
 			
 			people = wave.participants
 			
@@ -587,7 +584,7 @@ end
 
 # Represents a Wave, either local or remote.
 class Wave
-	attr_accessor :provider, :host, :name, :deltas, :participants, :contents, :applied_to
+	attr_accessor :provider, :host, :name, :deltas, :playback
 	
 	def initialize(provider, name=nil, host=nil)
 		@provider = provider
@@ -595,23 +592,25 @@ class Wave
 		@host = host || provider.domain
 		
 		@deltas = {}
-		@participants = []
-		@contents = []
-		@applied_to = 0
+		@playback = Playback.new(self)
 		
 		self << FakeDelta.new(self)
 	end
 	
-	# Size of the wave's contents, strings are the number of bytes and everything
-	# else counts as one
-	def item_count
-		@contents.inject(0) do |total, item|
-			if item.is_a? String
-				next total + item.size
-			else
-				next total + 1
-			end
-		end
+	# Shortcut to PlayBack#participants
+	def participants
+		@playback.apply :newest unless @playback.at_newest?
+		@playback.participants
+	end
+	# Shortcut to PlayBack#contents
+	def contents
+		@playback.apply :newest unless @playback.at_newest?
+		@playback.contents
+	end
+	# Shortcut to PlayBack#to_xml
+	def to_xml
+		@playback.apply :newest unless @playback.at_newest?
+		@playback.to_xml
 	end
 	
 	# Returns a sorted list of all real deltas that this server has.
@@ -638,6 +637,7 @@ class Wave
 	# Adds a delta to the wave.
 	def <<(delta)
 		@deltas[delta.version] = delta
+		playback.apply delta if complete?
 	end
 	
 	# Returns the latest version number. Faster than newest.version
@@ -660,125 +660,27 @@ class Wave
 	# Pass true as the argument to request more history if incomplete; pass a
 	# Hash and it'll set key packet-id to the current Wave.
 	def complete?(request_more=false)
-		@deltas.each_value do |delta|
-			if delta.is_a?(FakeDelta) && delta.version != 0
-			
-				if request_more
-					puts "Requesting more deltas for #{self.path}"
-					
-					server = @provider.servers[@host]
-					unless server
-						server = Server.new(@provider, @host, @host)
-						@provider << server
-					end
-					
-					id = @provider.sock.rand_id
-					server << ['iq', 'get', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"0\" start-version-hash=\"#{encode64(self[0].hash)}\" end-version=\"#{self.newest_version}\" end-version-hash=\"#{encode64(self.newest.hash)}\" wavelet-name=\"#{self.conv_root_path}\"/></items></pubsub>", id]
-					request_more[id] = self if request_more.is_a? Hash
-				end
-				
-				return false
-			end
-		end
-		true
-	end
-	
-	def apply(delta=nil)
-		delta ||= self[@applied_to + 1]
-		if !complete?
-			puts "The wave isn't complete; I can't apply a delta yet."
-		elsif delta.applied
-			puts "That delta is already applied."
-		else
-			if (delta.version - 1) > @applied_to
-				puts "Need to apply #{delta.version - @applied_to - 1} deltas first."
-				apply until @applied_to == delta.version - 1
-			end
-			
-			puts "Applying delta #{delta.version} to #{self.path}"
-			
-			delta.operations.each do |op|
-				@participants += op.who if op.is_a? AddUserOp
-				@participants -= op.who if op.is_a? RemoveUserOp
-				apply_mutate(op) if op.is_a? MutateOp
-			end
-			
-			@applied_to += 1
-			delta.applied = true
-		end
-	end
-	
-	# Apply a mutation. Does NO version checking!
-	#
-	# TODO: Handle mid-string stuff. Might add a whole class for mutations.
-	def apply_mutate(operation)
-		if operation.document_id != 'main'
-			puts "Non-main document: #{document}. ABORT"
-			p operation
-			exit
+		fakes = @deltas.values.select do |delta|
+			delta.is_a?(FakeDelta) && delta.version != 0
 		end
 		
-		item = 0 # in the 'contents' array
-		index = 0 # in a string
-		operation.components.each do |component|
-			if component[:retain_item_count]
-				advance = component[:retain_item_count]
-				until advance == 0
-					if !@contents[item].is_a?(String)
-						advance -= 1
-						item += 1
-						index = 0
-					elsif (@contents[item].size - index) <= advance
-						advance -= (@contents[item].size - index)
-						item += 1
-						index = 0
-					else # advance within current string
-						index += advance
-						advance = 0
-					end
-				end
-				puts "Advanced #{component[:retain_item_count]} items"
+		return true if fakes.empty?
 			
-			elsif component[:element_start]
-				element = Element.new(component[:element_start][:type])
-				component[:element_start][:attributes].each do |attribute|
-					element.attributes[attribute[:key]] = attribute[:value]
-				end
-				
-				@contents.insert(item, element)
-				item += 1
-				index = 0
+		if request_more
+			puts "Requesting more deltas for #{self.path}"
 			
-			elsif component[:element_end]
-				@contents.insert(item, :end)
-				item += 1
-				index = 0
-			
-			elsif component[:characters]
-				@contents.insert(item, component[:characters])
-				item += 1
-				index = 0
+			server = @provider.servers[@host]
+			unless server
+				server = Server.new(@provider, @host, @host)
+				@provider << server
 			end
+			
+			id = @provider.sock.rand_id
+			server << ['iq', 'get', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"0\" start-version-hash=\"#{encode64(self[0].hash)}\" end-version=\"#{self.newest_version}\" end-version-hash=\"#{encode64(self.newest.hash)}\" wavelet-name=\"#{self.conv_root_path}\"/></items></pubsub>", id]
+			request_more[id] = self if request_more.is_a? Hash
 		end
-	end
-	
-	def create_fedone_line(author, text)
-		if self.item_count > 0
-			[{:retain_item_count=>self.item_count},
-			 {:element_start=>
-				{:type=>"line",
-				 :attributes=>
-					[{:value=>author, :key=>"by"}]}},
-			 {:element_end=>true},
-			 {:characters=>text}]
-		else
-			[{:element_start=>
-				{:type=>"line",
-				 :attributes=>
-					[{:value=>author, :key=>"by"}]}},
-			 {:element_end=>true},
-			 {:characters=>text}]
-		end
+		
+		false
 	end
 end
 
@@ -802,28 +704,34 @@ class Playback
 	end
 	
 	def apply(version=nil)
-		version = @version + 1 if version == :next
-		version = @wave.newest_version if version == :newest
-
 		if !version
 			puts "No target version"
 			return false
+		end
+		
+		if !version.is_a?(Delta) && !version.is_a?(FakeDelta)
+			version = @version + 1 if version == :next
+			version = @wave.newest_version if version == :newest
+			delta = @wave[version]
+		else
+			delta = version
+			version = delta.version
+		end
+		
+		if version <= @version
+			puts "Delta #{version} is already applied; at #{@version}."
+			return false
 		elsif !@wave.complete?
 			puts "The wave isn't complete; I can't apply a delta yet."
-			return false
-		elsif version <= @version
-			puts "Delta #{version} is already applied; at #{@version}."
 			return false
 		end
 	
 		if (version - 1) > @version
 			puts "Need to apply #{version - @version - 1} deltas first."
-			apply until @version == version - 1
+			apply :next until @version == version - 1
 		end
 		
-		delta = @wave[version]
-		
-		puts "Applying delta #{delta.version} to #{@wave.path}"
+		puts "Applying delta #{version} to #{@wave.path}"
 		
 		delta.operations.each do |op|
 			@participants += op.who if op.is_a? AddUserOp
@@ -831,7 +739,7 @@ class Playback
 			apply_mutate(op) if op.is_a? MutateOp
 		end
 		
-		@version = delta.version
+		@version = version
 	end
 	
 	def to_xml
@@ -857,6 +765,37 @@ class Playback
 				0/0
 			end
 		end.join("\n")
+	end
+	
+	# Size of the wave's contents, strings are the number of bytes and everything
+	# else counts as one
+	def item_count
+		@contents.inject(0) do |total, item|
+			if item.is_a? String
+				next total + item.size
+			else
+				next total + 1
+			end
+		end
+	end
+	
+	def create_fedone_line(author, text)
+		if self.item_count > 0
+			[{:retain_item_count=>self.item_count},
+			 {:element_start=>
+				{:type=>"line",
+				 :attributes=>
+					[{:value=>author, :key=>"by"}]}},
+			 {:element_end=>true},
+			 {:characters=>text}]
+		else
+			[{:element_start=>
+				{:type=>"line",
+				 :attributes=>
+					[{:value=>author, :key=>"by"}]}},
+			 {:element_end=>true},
+			 {:characters=>text}]
+		end
 	end
 	
 	protected

@@ -74,7 +74,7 @@ config['fixture-waves'].each_pair do |id, data|
 		delta.operations << RemoveUserOp.new(address(delta_data['remove'], provider)) if delta_data['remove']
 		if delta_data['mutate']
 			delta.operations << MutateOp.new('main', 
-				wave.create_fedone_line(address(delta_data['author'], provider), delta_data['mutate']))
+				wave.playback.create_fedone_line(address(delta_data['author'], provider), delta_data['mutate']))
 		end
 		
 		delta.freeze
@@ -314,13 +314,12 @@ until sock.closed?
 					ids.delete id
 					puts "Got history for #{wave.name}"
 					
-					delta = nil
 					(packet/'pubsub/items/item/applied-delta').each do |update|
 						delta = Delta.parse(provider, wave.conv_root_path, decode64(update.inner_text), true)
 						puts "Got a delta, version #{delta.version}"
 					end
 					
-					wave.apply delta if delta # apply the latest only for less output
+					wave.playback.apply :newest
 				end
 			
 			when [:message, :normal], [:message, :none]
@@ -351,7 +350,7 @@ until sock.closed?
 								wave = delta.wave
 							end
 							
-							wave.apply(wave.newest) if wave.complete?(ids)
+							wave.playback.apply(:newest) if wave.complete?(ids)
 						end
 						
 						sock.send_xml 'message', 'normal', from, '<received xmlns="urn:xmpp:receipts"/>', id

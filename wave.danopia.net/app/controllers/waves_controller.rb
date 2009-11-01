@@ -7,7 +7,7 @@ class WavesController < ApplicationController
 
   def show
 		if params[:id] == 'new'
-			@wave = Wave.new(@remote.provider, random_name)
+			@wave = Wave.new(@remote.provider)
 			@remote << @wave
     	redirect_to wave_path(@wave.name)
 			return
@@ -21,7 +21,7 @@ class WavesController < ApplicationController
     	@remote.add_delta @wave, delta
     	
 			delta = Delta.new @wave, @address
-			delta.operations << MutateOp.new('main', create_fedone_line(@address, "Hey there, this is #{@address}, and I'm using Ruby on Sails!", @wave))
+			delta.operations << MutateOp.new('main', @wave.playback.create_fedone_line(@address, "Hey there, I'm #{@address} "))
     	@remote.add_delta @wave, delta
     end
     
@@ -32,7 +32,7 @@ class WavesController < ApplicationController
 		
 		if @wave.participants.include? @address
 			delta = Delta.new @wave, @address
-			delta.operations << MutateOp.new('main', create_fedone_line(@address, params[:message], @wave))
+			delta.operations << MutateOp.new('main', @wave.playback.create_fedone_line(@address, params[:message]))
     	@remote.add_delta(@wave, delta)
     	flash[:notice] = "Your message has been added."
     else
@@ -75,30 +75,4 @@ class WavesController < ApplicationController
     
     redirect_to wave_path(@wave.name)
   end
-
-	protected
-	
-	def create_fedone_line(author, text, wave)
-		if wave.item_count > 0
-			[{:retain_item_count=>wave.item_count},
-			 {:element_start=>
-				{:type=>"line",
-				 :attributes=>
-					[{:value=>author, :key=>"by"}]}},
-			 {:element_end=>true},
-			 {:characters=>text}]
-		else
-			[{:element_start=>
-				{:type=>"line",
-				 :attributes=>
-					[{:value=>author, :key=>"by"}]}},
-			 {:element_end=>true},
-			 {:characters=>text}]
-		end
-	end
-	
-	def random_name(length=12)
-		@letters ||= ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
-		([''] * length).map { @letters[rand * @letters.size] }.join('')
-	end
 end
