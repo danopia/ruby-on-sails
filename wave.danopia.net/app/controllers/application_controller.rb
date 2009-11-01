@@ -3,7 +3,7 @@ class ApplicationController < ActionController::Base
 	helper_method :current_user_session, :current_user, 'logged_in?'
 	filter_parameter_logging :password, :password_confirmation
 	
-	private
+	protected
 
   def logged_in?
 		return current_user ? true : false

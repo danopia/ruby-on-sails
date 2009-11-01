@@ -387,9 +387,7 @@ class Delta
 	def self.parse provider, wavelet, data, applied=false
 		timestamp = nil
 		if applied
-			p data
 			data = WaveProtoBuffer.parse(:applied_delta, data) if data.is_a? String
-			p data
 			timestamp = data[:timestamp]
 			data = data[:signed_delta]
 		else
@@ -438,7 +436,6 @@ class Delta
 					delta.operations << MutateOp.parse(details)
 			end
 		end
-			p delta.to_applied
 		
 		wave << delta
 		if applied
@@ -691,8 +688,6 @@ class Wave
 	
 	def apply(delta=nil)
 		delta ||= self[@applied_to + 1]
-		#pp delta
-		#pp self
 		if !complete?
 			puts "The wave isn't complete; I can't apply a delta yet."
 		elsif delta.applied
@@ -714,6 +709,110 @@ class Wave
 			@applied_to += 1
 			delta.applied = true
 		end
+	end
+	
+	protected
+	
+	# Apply a mutation. Does NO version checking!
+	#
+	# TODO: Handle mid-string stuff. Might add a whole class for mutations.
+	def apply_mutate(operation)
+		if operation.document_id != 'main'
+			puts "Non-main document: #{document}. ABORT"
+			p operation
+			exit
+		end
+		
+		item = 0 # in the 'contents' array
+		index = 0 # in a string
+		operation.components.each do |component|
+			if component[:retain_item_count]
+				advance = component[:retain_item_count]
+				until advance == 0
+					if !@contents[item].is_a?(String)
+						advance -= 1
+						item += 1
+						index = 0
+					elsif (@contents[item].size - index) <= advance
+						advance -= (@contents[item].size - index)
+						item += 1
+						index = 0
+					else # advance within current string
+						index += advance
+						advance = 0
+					end
+				end
+				puts "Advanced #{component[:retain_item_count]} items"
+			
+			elsif component[:element_start]
+				element = Element.new(component[:element_start][:type])
+				component[:element_start][:attributes].each do |attribute|
+					element.attributes[attribute[:key]] = attribute[:value]
+				end
+				
+				@contents.insert(item, element)
+				item += 1
+				index = 0
+			
+			elsif component[:element_end]
+				@contents.insert(item, :end)
+				item += 1
+				index = 0
+			
+			elsif component[:characters]
+				@contents.insert(item, component[:characters])
+				item += 1
+				index = 0
+			end
+		end
+	end
+end
+
+# Represents a certain version of a Wave. Starts at version 0 and can be played
+# back, version by version, to HEAD. At any step, you can grab participants,
+# XML representation, etc.
+class Playback
+	attr_accessor :wave, :version, :participants, :contents
+	
+	def new(wave, version=0)
+		@wave = wave
+		@version = 0
+		@participants = []
+		@contents = []
+		
+		self.apply version if version > 0
+	end
+	
+	def apply(version=nil)
+		version = @version + 1 if version == :next
+		version = @wave.newest_version if version == :newest
+
+		if !version
+			puts "No target version"
+			return false
+		elsif !@wave.complete?
+			puts "The wave isn't complete; I can't apply a delta yet."
+			return false
+		elsif version <= @version
+			puts "Delta #{version} is already applied; at #{@version}."
+			return false
+		end
+	
+		if (delta.version - 1) > @applied_to
+			puts "Need to apply #{delta.version - @applied_to - 1} deltas first."
+			apply until @applied_to == delta.version - 1
+		end
+		
+		puts "Applying delta #{delta.version} to #{self.path}"
+		
+		delta.operations.each do |op|
+			@participants += op.who if op.is_a? AddUserOp
+			@participants -= op.who if op.is_a? RemoveUserOp
+			apply_mutate(op) if op.is_a? MutateOp
+		end
+		
+		@applied_to += 1
+		delta.applied = true
 	end
 	
 	protected
