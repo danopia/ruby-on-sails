@@ -91,7 +91,6 @@ class Server
 	def certificate=(certificate)
 		@certificate = certificate
 		@certificate_hash = Digest::SHA2.digest "0\202\003\254#{decode64(@certificate)}"
-		p @certificate_hash
 	end
 	
 	def name=(new_name)
@@ -376,8 +375,6 @@ class Delta
 		@applied = false
 		@frozen = false
 		@signer_id = wave.provider.certificate_hash
-		puts 'a'
-		p @signer_id
 	end
 	
 	# Parses an incoming delta, taking the wavelet name (from the XML attribute)
@@ -711,8 +708,6 @@ class Wave
 		end
 	end
 	
-	protected
-	
 	# Apply a mutation. Does NO version checking!
 	#
 	# TODO: Handle mid-string stuff. Might add a whole class for mutations.
@@ -766,6 +761,25 @@ class Wave
 			end
 		end
 	end
+	
+	def create_fedone_line(author, text)
+		if self.item_count > 0
+			[{:retain_item_count=>self.item_count},
+			 {:element_start=>
+				{:type=>"line",
+				 :attributes=>
+					[{:value=>author, :key=>"by"}]}},
+			 {:element_end=>true},
+			 {:characters=>text}]
+		else
+			[{:element_start=>
+				{:type=>"line",
+				 :attributes=>
+					[{:value=>author, :key=>"by"}]}},
+			 {:element_end=>true},
+			 {:characters=>text}]
+		end
+	end
 end
 
 # Represents a certain version of a Wave. Starts at version 0 and can be played
@@ -774,13 +788,17 @@ end
 class Playback
 	attr_accessor :wave, :version, :participants, :contents
 	
-	def new(wave, version=0)
+	def initialize(wave, version=0)
 		@wave = wave
 		@version = 0
 		@participants = []
 		@contents = []
 		
 		self.apply version if version > 0
+	end
+	
+	def at_newest?
+		@version == @wave.newest_version
 	end
 	
 	def apply(version=nil)
@@ -798,12 +816,14 @@ class Playback
 			return false
 		end
 	
-		if (delta.version - 1) > @applied_to
-			puts "Need to apply #{delta.version - @applied_to - 1} deltas first."
-			apply until @applied_to == delta.version - 1
+		if (version - 1) > @version
+			puts "Need to apply #{version - @version - 1} deltas first."
+			apply until @version == version - 1
 		end
 		
-		puts "Applying delta #{delta.version} to #{self.path}"
+		delta = @wave[version]
+		
+		puts "Applying delta #{delta.version} to #{@wave.path}"
 		
 		delta.operations.each do |op|
 			@participants += op.who if op.is_a? AddUserOp
@@ -811,8 +831,32 @@ class Playback
 			apply_mutate(op) if op.is_a? MutateOp
 		end
 		
-		@applied_to += 1
-		delta.applied = true
+		@version = delta.version
+	end
+	
+	def to_xml
+		element_stack = []
+		@contents.map do |item|
+			if item.is_a? String
+				item
+				
+			elsif item == :end
+				"</#{element_stack.pop}>"
+				
+			elsif item.is_a? Element
+				element_stack << item.type
+				
+				attribs = ''
+				item.attributes.each_pair do |key, value|
+					attribs << " #{key}=\"#{value}\""
+				end
+				
+				"<#{item.type}#{attribs}>"
+				
+			else
+				0/0
+			end
+		end.join("\n")
 	end
 	
 	protected

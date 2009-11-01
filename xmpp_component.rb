@@ -58,91 +58,40 @@ end
 sock.provider = provider
 
 #################
+# Load fixtures
+def address(address, provider)
+	address += provider.domain if address[-1,1] == '@'
+	address
+end
 
-wave = Wave.new(provider, 'R0PIDtU751vF')
+config['fixture-waves'].each_pair do |id, data|
+	wave = Wave.new(provider, id)
+	
+	data['deltas'].each do |delta_data|
+		delta = Delta.new(wave, address(delta_data['author'], provider))
+		
+		delta.operations << AddUserOp.new(address(delta_data['add'], provider)) if delta_data['add']
+		delta.operations << RemoveUserOp.new(address(delta_data['remove'], provider)) if delta_data['remove']
+		if delta_data['mutate']
+			delta.operations << MutateOp.new('main', 
+				wave.create_fedone_line(address(delta_data['author'], provider), delta_data['mutate']))
+		end
+		
+		delta.freeze
+		wave << delta
+	end
+	
+	provider << wave
+end
 
-delta = Delta.new(wave, "me@#{provider.domain}")
-delta.operations << AddUserOp.new("me@#{provider.domain}")
-delta.freeze
-wave << delta
+#playback = Playback.new(provider['ASDFASDFASDF'])
+#pp playback.to_xml
 
-delta = Delta.new(wave, "me@#{provider.domain}")
-delta.operations << AddUserOp.new("test@#{provider.domain}")
-delta.freeze
-wave << delta
+#until playback.at_newest?
+#	playback.apply :next
+#	puts playback.to_xml
+#end
 
-delta = Delta.new(wave, "me@#{provider.domain}")
-delta.operations << MutateOp.new('main', ["(\004",
-			{2=>{0=>"line", 1=>{0=>"by", 1=>"me@#{provider.domain}"}}}," \001",
-			{1=>"This is a test."}])
-delta.freeze
-wave << delta
-
-delta = Delta.new(wave, "me@#{provider.domain}")
-delta.operations << RemoveUserOp.new("test@#{provider.domain}")
-delta.freeze
-wave << delta
-
-provider << wave
-
-#################
-
-wave = Wave.new(provider, 'BHW1z9FOWKua')
-
-delta = Delta.new(wave, "me@#{provider.domain}")
-delta.operations << AddUserOp.new("me@#{provider.domain}") # Add myself to the conv_root_path
-delta.freeze
-wave << delta
-
-delta = Delta.new(wave, "me@#{provider.domain}")
-delta.operations << AddUserOp.new('echoe@killerswan.com') # Add an echoey to the wave
-delta.freeze
-wave << delta
-
-delta = Delta.new(wave, "me@#{provider.domain}")
-delta.operations << RemoveUserOp.new('echoe@killerswan.com')
-delta.freeze
-wave << delta
-
-delta = Delta.new(wave, "me@#{provider.domain}")
-delta.operations << AddUserOp.new('echoey@killerswan.com')
-delta.freeze
-wave << delta
-
-provider << wave
-
-#################
-
-wave = Wave.new(provider, 'ASDFASDFASDF')
-
-delta = Delta.new(wave, "me@#{provider.domain}")
-delta.operations << AddUserOp.new("me@#{provider.domain}") # Add myself to the conv_root_path
-delta.freeze
-wave << delta
-
-delta = Delta.new(wave, "me@#{provider.domain}")
-delta.operations << AddUserOp.new('echoe@danopia.net') # Add an echoey to the wave
-delta.freeze
-wave << delta
-
-delta = Delta.new(wave, "me@#{provider.domain}")
-delta.operations << RemoveUserOp.new('echoe@danopia.net')
-delta.freeze
-wave << delta
-
-delta = Delta.new(wave, "me@#{provider.domain}")
-delta.operations << AddUserOp.new('echoey@danopia.net')
-delta.freeze
-wave << delta
-
-delta = Delta.new(wave, "me@#{provider.domain}")
-delta.operations << AddUserOp.new("danopia@#{provider.domain}")
-delta.propagate # !
-wave << delta
-
-provider << wave
-
-#p provider['ASDFASDFASDF']
 #exit
 #################
 
