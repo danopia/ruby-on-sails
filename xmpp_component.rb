@@ -213,8 +213,8 @@ until sock.closed?
 					if wave
 						delta = wave[node['version'].to_i]
 						
-						domain = nil
-						domain = $1 if delta && delta.author =~ /^.+@(.+)$/
+						domain = provider.domain
+						domain = $1 if delta.is_a?(Delta) && delta.author =~ /^.+@(.+)$/
 						
 						if !delta
 							puts 'Unknown delta.'
