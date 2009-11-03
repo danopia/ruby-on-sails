@@ -10,6 +10,7 @@ ActionController::Routing::Routes.draw do |map|
 	  :requirements => { :who => %r([^/;,?]+) }
 
 	map.wave_update 'waves/:id/update', :controller => 'waves', :action => 'update'
+	map.wave_ajax 'waves/:id/ajax', :controller => 'waves', :action => 'ajax'
 	map.domain_wave 'waves/:domain/:id', :controller => 'waves', :action => 'show',
 	  :requirements => { :domain => %r([^/;,?]+) }
   

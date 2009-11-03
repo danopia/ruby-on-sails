@@ -70,10 +70,10 @@ config['fixture-waves'].each_pair do |id, data|
 	data['deltas'].each do |delta_data|
 		delta = Delta.new(wave, address(delta_data['author'], provider))
 		
-		delta.operations << AddUserOp.new(address(delta_data['add'], provider)) if delta_data['add']
-		delta.operations << RemoveUserOp.new(address(delta_data['remove'], provider)) if delta_data['remove']
+		delta << AddUserOp.new(address(delta_data['add'], provider)) if delta_data['add']
+		delta << RemoveUserOp.new(address(delta_data['remove'], provider)) if delta_data['remove']
 		if delta_data['mutate']
-			delta.operations << MutateOp.new('main', 
+			delta << MutateOp.new('main', 
 				wave.playback.create_fedone_line(address(delta_data['author'], provider), delta_data['mutate']))
 		end
 		
@@ -331,7 +331,8 @@ until sock.closed?
 							puts "Unknown server."
 						
 						elsif server.state == :details
-							server.state = :ponged
+server.state = :ready
+server.flush
 							puts "#{from} ponged, attempting to send my cert (state = :ponged)"
 							
 							sock.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{provider.certificate}]]></certificate></signature></item></publish></pubsub>"

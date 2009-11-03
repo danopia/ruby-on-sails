@@ -263,7 +263,12 @@ class FakeDelta
 	def initialize(wave, version=0, hash=nil)
 		@wave = wave
 		@version = version
-		@hash = hash || "wave://#{wave.conv_root_path}"
+		@hash = hash || "#{wave.conv_root_path}"
+	end
+	
+	# Easier than adding more if's
+	def operations
+		[:noop]
 	end
 end
 
@@ -339,6 +344,7 @@ class MutateOp
 	def self.parse(data)
 		doc = data[:document_id]
 		components = data[:mutation][:components]
+		p MutateOp.new(doc, components)
 		MutateOp.new(doc, components)
 	end
 	
@@ -369,7 +375,7 @@ class Delta
 	def initialize(wave, author=nil)
 		@wave = wave
 		@author = author
-		@version = wave.newest_version + 1
+		@version = wave.newest_version #+ 1
 		@operations = []
 		@time = Time.now.to_i * 1000
 		@applied = false
@@ -402,12 +408,12 @@ class Delta
 			provider << wave
 		end
 		
-		version = data[:delta][:applied_to][:version] + 1
-		applied_to = wave[version - 1]
+		version = data[:delta][:applied_to][:version]
+		applied_to = wave[version]
 		
 		unless applied_to
 			applied_to = FakeDelta.new(wave)
-			applied_to.version = version - 1
+			applied_to.version = version
 			applied_to.hash = data[:delta][:applied_to][:hash]
 			wave << applied_to
 		end
@@ -426,11 +432,11 @@ class Delta
 			details = operation.values.first
 			case type
 				when :added
-					delta.operations << AddUserOp.new(details)
+					delta << AddUserOp.new(details)
 				when :removed
-					delta.operations << RemoveUserOp.new(details)
+					delta << RemoveUserOp.new(details)
 				when :mutate
-					delta.operations << MutateOp.parse(details)
+					delta << MutateOp.parse(details)
 			end
 		end
 		
@@ -439,6 +445,11 @@ class Delta
 		delta.propagate(applied) unless applied
 		
 		delta
+	end
+	
+	def <<(operation)
+		@operations << operation
+		@version += 1
 	end
 	
 	# Dumps the raw delta to a hash. Not ready to send out, but used for
@@ -455,7 +466,7 @@ class Delta
 	
 	# Helper method to return a hash of the previous version/hash.
 	def prev_version
-		{	:version => @version - 1,
+		{	:version => @version - @operations.size,
 			:hash => prev_hash}
 	end
 	
@@ -497,7 +508,7 @@ class Delta
 	
 	# Find the previous version's hash. This is made simple because of FakeDelta.
 	def prev_hash
-		@wave[@version - 1].hash
+		@wave[@version - @operations.size].hash
 	end
 	
 	# Hash the delta, using SHA2 and trimming down the length of SHA1.
@@ -620,7 +631,7 @@ class Wave
 	
 	# Builds a wave path in the form of host/w+wave
 	def path
-		"#{@host}/w+#{@name}"
+		"wave://#{@host}/w+#{@name}"
 	end
 	
 	# Builds a wavelet path to 'conv+root' (for Fedone) in the form of
@@ -710,8 +721,9 @@ class Playback
 		end
 		
 		if !version.is_a?(Delta) && !version.is_a?(FakeDelta)
-			version = @version + 1 if version == :next
+			version = @version + wave[@version].operations.size if version == :next
 			version = @wave.newest_version if version == :newest
+			#pp @wave.deltas
 			delta = @wave[version]
 		else
 			delta = version
@@ -726,9 +738,9 @@ class Playback
 			return false
 		end
 	
-		if (version - 1) > @version
+		if (version - delta.operations.size) > @version
 			puts "Need to apply #{version - @version - 1} deltas first."
-			apply :next until @version == version - 1
+			apply :next until @version == version - delta.operations.size
 		end
 		
 		puts "Applying delta #{version} to #{@wave.path}"
@@ -849,6 +861,10 @@ class Playback
 			elsif component[:characters]
 				@contents.insert(item, component[:characters])
 				item += 1
+				index = 0
+			
+			elsif component[:delete_chars]
+				@contents.delete_at(item)
 				index = 0
 			end
 		end

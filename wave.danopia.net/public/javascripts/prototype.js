@@ -1608,7 +1608,8 @@ Element.Methods = {
     if (content && content.toElement) content = content.toElement();
     if (Object.isElement(content)) return element.update().insert(content);
     content = Object.toHTML(content);
-    element.innerHTML = content.stripScripts();
+    if (content != '')
+      element.innerHTML = content.stripScripts();
     content.evalScripts.bind(content).defer();
     return element;
   },

@@ -17,33 +17,39 @@
 
 <hr/>
 <p><strong><a name="contents">Contents</a></strong></p>
+<blockquote id="contents2">
 <% @wave.contents.each do |item| -%>
 <% if item.is_a?(Element) %>
-<p>&lt;<%=h item.attributes['by'] %>&gt;
+	<p>&lt;<%=h item.attributes['by'] %>&gt;
 <% elsif item.is_a?(String) %>
 <%=h item %></p>
 <% end -%>
 <% end -%>
+</blockquote>
+<%= link_to_remote "Update", :update => "contents2", :url => "/waves/#{@wave.name}/ajax" %>
 
-<%= form_tag wave_update_path(@wave.name) %>
+
+<%= form_remote_tag :url => wave_update_path(@wave.name), :complete => "submitted();", :html => {'id' => 'add-form'} %>
 	<%= text_field_tag "message" %>
 	<%= submit_tag "Add FedOne line" %>
 </form>
 
-<hr/>
-<p><strong>History</strong></p>
-
-<% @wave.real_deltas.each do |delta| %>
-
-<p><%=h delta.author %> added <a name="r<%=h delta.version %>">r<%=h delta.version %></a>:
-
-<% delta.operations.each do |operation| -%>
-<% if operation.is_a?(AddUserOp) || operation.is_a?(RemoveUserOp) -%>
-<em><%=h operation.to_s %></em>
-<% elsif operation.is_a? MutateOp -%>
-<%=h operation.to_s %>
-<% end -%>
-</p>
-<% end -%>
-
-<% end -%>
+<script type="text/javascript" src="/javascripts/prototype.js"></script>
+<script type="text/javascript">
+var timer = 0;
+function queueUpdate() {
+	timer = setTimeout('update()', 1000);
+}
+function submitted() {
+	document.getElementById('message').value = '';
+	
+	if (timer != 0)
+		clearTimeout(timer);
+	update();
+}
+function update() {
+	timer = 0;
+	new Ajax.Updater('contents2', '/waves/<%=h @wave.name %>/ajax', {asynchronous:true, evalScripts:true, onSuccess:queueUpdate, onFailure:function(){alert('Error!');}, parameters:Form.serialize(document.getElementById('add-form'))});
+}
+update();
+</script>
