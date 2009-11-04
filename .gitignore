@@ -1,0 +1,2 @@
+rails/db/*.sqlite3
+rails/log
