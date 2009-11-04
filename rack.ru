@@ -85,7 +85,7 @@ class SailsAdapter
 		#end
 		
 		#yield "<script type=\"text/javascript\">window.location.reload();</script>"
-		yield "<script type=\"text/javascript\">alert('hi');</script>"
+		#yield "<script type=\"text/javascript\">alert('hi');</script>"
 		
 		#data = data.size.to_s(16) + "\r\n" + data + "\r\n0\r\n\r\n"
 		
@@ -111,7 +111,7 @@ end
 
 use Rack::CommonLogger
 
-rails_app = Rack::Adapter::Rails.new(:root => './wave.danopia.net')
+rails_app = Rack::Adapter::Rails.new(:root => './rails')
 
 app = Rack::URLMap.new('/ajax'  => SailsAdapter.new(rails_app),
                        '/' => rails_app)

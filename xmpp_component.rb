@@ -12,7 +12,7 @@ require 'drb'
 require 'yaml'
 
 require 'wave_proto'
-require 'wave.danopia.net/lib/sails_remote'
+require 'rails/lib/sails_remote'
 
 def encode64(data)
 	Base64.encode64(data).gsub("\n", '')
