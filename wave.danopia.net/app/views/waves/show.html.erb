@@ -49,7 +49,7 @@ function submitted() {
 }
 function update() {
 	timer = 0;
-	new Ajax.Updater('contents2', '/waves/<%=h @wave.name %>/ajax', {asynchronous:true, evalScripts:true, onSuccess:queueUpdate, onFailure:function(){alert('Error!');}, parameters:Form.serialize(document.getElementById('add-form'))});
+	new Ajax.Updater('contents2', '<%=wave_ajax_path @wave.name %>', {asynchronous:true, evalScripts:true, onSuccess:queueUpdate, onFailure:function(){alert('Error!');}, parameters:Form.serialize(document.getElementById('add-form'))});
 }
 update();
 </script>

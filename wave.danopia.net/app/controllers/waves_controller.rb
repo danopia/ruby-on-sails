@@ -32,44 +32,47 @@ class WavesController < ApplicationController
   def ajax
 		@wave = @remote[params[:id]]
 		unless @wave
-			render :text => @remote[params[:id]].inspect, :status => 404
+			render :text => @remote[params].inspect, :status => 404
 			return
 		end
 		
-		if params[:message] && params[:message].size > 0
-			delta = Delta.new @wave, @address
-			#components = @wave.playback.create_fedone_line(@address, params[:message])
-			total = 0
-			start = 0
-			old = nil
-			@wave.contents.each do |content|
-				if content.is_a? String
-					if old == :next
-						old = content
-						start = total
-					end
-					total += content.size
-				elsif content.is_a? Element
-					total += 1
-					if content.attributes['by'] == @address
-						old = :next
-					end
-				else
-					total += 1
-				end
-			end
-			
-			components = [{:retain_item_count => start},
-			 {:delete_chars => old},
-			 {:characters => params[:message]},
-			 {:retain_item_count => total - start}]
-			 
-			delta << MutateOp.new('main', components)
-    	@remote.add_delta(@wave, delta)
-    end
+		render :text => 'OK'
 		
-		version = @wave.newest_version
-		i = 0
+		#
+		#if params[:message] && params[:message].size > 0
+		#	delta = Delta.new @wave, @address
+		#	#components = @wave.playback.create_fedone_line(@address, params[:message])
+		#	total = 0
+		#	start = 0
+		#	old = nil
+		#	@wave.contents.each do |content|
+		#		if content.is_a? String
+		#			if old == :next
+		#				old = content
+		#				start = total
+		#			end
+		#			total += content.size
+		#		elsif content.is_a? Element
+		#			total += 1
+		#			if content.attributes['by'] == @address
+		#				old = :next
+		#			end
+		#		else
+		#			total += 1
+		#		end
+		#	end
+		#	
+		#	components = [{:retain_item_count => start},
+		#	 {:delete_chars => old},
+		#	 {:characters => params[:message]},
+		#	 {:retain_item_count => total - start}]
+		#	 
+		#	delta << MutateOp.new('main', components)
+    #	@remote.add_delta(@wave, delta)
+    #end
+		
+		#version = @wave.newest_version
+		#i = 0
 		
 		#while @remote[params[:id]].newest_version == version
 			#sleep 1
@@ -82,7 +85,7 @@ class WavesController < ApplicationController
 			
 		#end
 		#	@wave = @remote[params[:id]]
-  	render :text => @wave.to_xml.gsub(/<line by="([^"]+)">\n<\/line>/, '<br/>&lt;\1&gt; ')
+  	#render :text => @wave.to_xml.gsub(/<line by="([^"]+)">\n<\/line>/, '<br/>&lt;\1&gt; ')
   end
 
   def update

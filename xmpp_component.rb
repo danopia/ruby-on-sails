@@ -99,6 +99,8 @@ if config['ping']
 	provider << Server.new(provider, config['ping'], config['ping'])
 end
 
+provider.load_cert config['certificate-chain'].first
+
 sock.send_raw '<stream:stream xmlns="jabber:component:accept" xmlns:stream="http://etherx.jabber.org/streams" to="' + provider.name + '">'
 
 message = sock.recv 1024

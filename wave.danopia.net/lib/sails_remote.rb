@@ -182,7 +182,11 @@ class Provider < Server
 		@sock = nil
 		@servers = ServerList.new
 		
-		self.certificate = open("#{@domain}.cert").read.split("\n")[1..-2].join('')
+		# load_cert("#{@domain}.cert")
+	end
+	
+	def load_cert(path)
+		self.certificate = open(path).read.split("\n")[1..-2].join('')
 	end
 	
 	# Return a wave.
