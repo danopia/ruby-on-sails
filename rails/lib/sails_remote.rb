@@ -1,6 +1,12 @@
 require 'openssl'
 require 'drb'
 
+class OpenSSL::X509::Name
+	def [](key)
+		to_a.accept{|pair| pair.first == key}.first[1] rescue nil
+	end
+end
+
 class SailsError < RuntimeError; end
 class ProviderError < SailsError; end
 
@@ -754,7 +760,7 @@ class Wave
 				@provider << server
 			end
 			
-			id = @provider.sock.rand_id
+			id = @provider.random_packet_id
 			server << ['iq', 'get', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"0\" start-version-hash=\"#{encode64(self[0].hash)}\" end-version=\"#{self.newest_version}\" end-version-hash=\"#{encode64(self.newest.hash)}\" wavelet-name=\"#{self.conv_root_path}\"/></items></pubsub>", id]
 			request_more[id] = self if request_more.is_a? Hash
 		end
@@ -767,13 +773,13 @@ end
 # back, version by version, to HEAD. At any step, you can grab participants,
 # XML representation, etc.
 class Playback
-	attr_accessor :wave, :version, :participants, :contents
+	attr_accessor :wave, :version, :participants, :documents
 	
 	def initialize(wave, version=0)
 		@wave = wave
 		@version = 0
 		@participants = []
-		@contents = []
+		@documents = {}
 		
 		self.apply version if version > 0
 	end
@@ -789,7 +795,11 @@ class Playback
 		end
 		
 		if !version.is_a?(Delta) && !version.is_a?(FakeDelta)
-			version = @version + wave[@version].operations.size if version == :next
+			if version == :next
+				version = @version + 1
+				version += 1 until @wave[version]
+			end
+			
 			version = @wave.newest_version if version == :newest
 			#pp @wave.deltas
 			delta = @wave[version]
@@ -822,9 +832,9 @@ class Playback
 		@version = version
 	end
 	
-	def to_xml
+	def to_xml(document_id='main')
 		element_stack = []
-		@contents.map do |item|
+		@documents[document_id].map do |item|
 			if item.is_a? String
 				item
 				
@@ -849,8 +859,8 @@ class Playback
 	
 	# Size of the wave's contents, strings are the number of bytes and everything
 	# else counts as one
-	def item_count
-		@contents.inject(0) do |total, item|
+	def item_count(doc)
+		doc.inject(0) do |total, item|
 			if item.is_a? String
 				next total + item.size
 			else
@@ -859,9 +869,10 @@ class Playback
 		end
 	end
 	
-	def create_fedone_line(author, text)
-		if self.item_count > 0
-			[{:retain_item_count=>self.item_count},
+	def create_fedone_line(doc, author, text)
+		doc = @documents[doc] ||= [] unless doc.is_a? Array
+		if self.item_count(doc) > 0
+			[{:retain_item_count=>self.item_count(doc)},
 			 {:element_start=>
 				{:type=>"line",
 				 :attributes=>
@@ -884,24 +895,20 @@ class Playback
 	#
 	# TODO: Handle mid-string stuff. Might add a whole class for mutations.
 	def apply_mutate(operation)
-		if operation.document_id != 'main'
-			puts "Non-main document: #{document}. ABORT"
-			p operation
-			exit
-		end
+		doc = @documents[operation.document_id] ||= []
 		
 		item = 0 # in the 'contents' array
 		index = 0 # in a string
-		operation.components.each do |component|
+		operation.components.compact.each do |component|
 			if component[:retain_item_count]
 				advance = component[:retain_item_count]
 				until advance == 0
-					if !@contents[item].is_a?(String)
+					if !doc[item].is_a?(String)
 						advance -= 1
 						item += 1
 						index = 0
-					elsif (@contents[item].size - index) <= advance
-						advance -= (@contents[item].size - index)
+					elsif (doc[item].size - index) <= advance
+						advance -= (doc[item].size - index)
 						item += 1
 						index = 0
 					else # advance within current string
@@ -913,26 +920,26 @@ class Playback
 			
 			elsif component[:element_start]
 				element = Element.new(component[:element_start][:type])
-				component[:element_start][:attributes].each do |attribute|
+				(component[:element_start][:attributes] || []).each do |attribute|
 					element.attributes[attribute[:key]] = attribute[:value]
 				end
 				
-				@contents.insert(item, element)
+				doc.insert(item, element)
 				item += 1
 				index = 0
 			
 			elsif component[:element_end]
-				@contents.insert(item, :end)
+				doc.insert(item, :end)
 				item += 1
 				index = 0
 			
 			elsif component[:characters]
-				@contents.insert(item, component[:characters])
+				doc.insert(item, component[:characters])
 				item += 1
 				index = 0
 			
 			elsif component[:delete_chars]
-				@contents.delete_at(item)
+				doc.delete_at(item)
 				index = 0
 			end
 		end

@@ -44,7 +44,7 @@ config['fixture-waves'].each_pair do |id, data|
 		delta << RemoveUserOp.new(address(delta_data['remove'], provider)) if delta_data['remove']
 		if delta_data['mutate']
 			delta << MutateOp.new('main', 
-				wave.playback.create_fedone_line(address(delta_data['author'], provider), delta_data['mutate']))
+				wave.playback.create_fedone_line('main', address(delta_data['author'], provider), delta_data['mutate']))
 		end
 		
 		wave << delta
@@ -174,52 +174,15 @@ until provider.sock.closed?
 					puts "#{from} requested a certificate"
 					
 					node = (packet/'pubsub/items/signer-request').first
-					node['wavelet-name'] =~ /^(.+)\/w\+(.+)\/(.+)$/
-					wave_domain, wave_name, wavelet_name = $1, $2, $3
-					wave_domain.sub!('wave://', '')
-					
-					wave = provider["#{wave_domain}/w+#{wave_name}"]
-					if wave
-						#version = node['version'].to_i + 1
-						#version += 1 until delta = wave[version]
-						
-						delta = wave.deltas.values.select{|item| item.hash == decode64(node['history-hash']) }
-						pp delta.size
-						delta = delta.first
-						version = delta.version
+					hash = decode64(node['signer-id'])
+					server = provider.servers.values.accept{|item| item.signature_hash == hash}.first
 
-						p version
-						p delta.signer_id
-						p decode64(node['signer-id'])
-						p delta.hash
-						p decode64(node['history-hash'])
-						
-						domain = provider.domain
-						domain = $1 if delta.is_a?(Delta) && delta.author =~ /^.+@(.+)$/
-						
-						if !delta
-							puts 'Unknown delta.'
+					if server
+						puts "Sending a cert to #{from} on request, for #{server.domain}"
 							
-						elsif !domain
-							puts 'Unknown domain for that delta.'
-							
-						elsif delta.is_a?(FakeDelta) || (delta.signer_id == decode64(node['signer-id']) && delta.hash == decode64(node['history-hash']))
-						
-							server = provider
-							
-							if delta.is_a?(Delta) && delta.author =~ /@(.+)$/ && provider.servers[$1.downcase]
-								server = provider.servers[$1.downcase]
-							end
-							
-							puts "Sending a cert to #{from} on request, for #{server.domain}"
-							
-							provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{server.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{server.certificate}]]></certificate></signature></items></pubsub>"
-							
-						else
-							puts 'Delta signer/hash doesn\'t match the request.'
-						end
+						provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{server.certificate.subject['CN']}\" algorithm=\"SHA256\"><certificate><![CDATA[#{server.certificate64}]]></certificate></signature></items></pubsub>"
 					else
-						puts 'Unknown wave.'
+						puts 'Couldn\'t find the signer ID.' # TODO: Send error packet
 					end
 					
 				end
@@ -343,7 +306,7 @@ until provider.sock.closed?
 							wave.playback.apply(:newest) if wave && wave.complete?(ids)
 						end
 						
-						sock.send_xml 'message', 'normal', from, '<received xmlns="urn:xmpp:receipts"/>', id
+						provider.send_xml 'message', 'normal', from, '<received xmlns="urn:xmpp:receipts"/>', id
 						
 					elsif subtype == 'ping'
 						puts "Got a ping from #{from}"
