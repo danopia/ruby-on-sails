@@ -43,13 +43,24 @@ function queueUpdate() {
 function submitted() {
 	document.getElementById('message').value = '';
 	
-	if (timer != 0)
-		clearTimeout(timer);
+	if (timer != 0) clearTimeout(timer);
 	update();
 }
 function update() {
 	timer = 0;
 	new Ajax.Updater('contents2', '<%=wave_ajax_path @wave.name %>', {asynchronous:true, evalScripts:true, onSuccess:queueUpdate, onFailure:function(){alert('Error!');}, parameters:Form.serialize(document.getElementById('add-form'))});
+	/*new Ajax.Request('<%=wave_ajax_path @wave.name %>', {
+  method: 'get',
+  onSuccess: function(transport) {
+  	alert(transport.responseText);
+    //var notice = $('data');
+    if (transport.responseText.match(/href="http:\/\/prototypejs.org/))
+      notice.update('Yeah! You are in the Top 10!').setStyle({ background: '#dfd' });
+    else
+      notice.update('Damn! You are beyond #10...').setStyle({ background: '#fdd' });
+  }
+});*/
+
 }
 update();
 </script>

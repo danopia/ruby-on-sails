@@ -29,6 +29,9 @@ puts "Connecting to #{config['xmpp-connect-host']}:#{config['xmpp-connect-port']
 sock = TCPSocket.new config['xmpp-connect-host'] || 'localhost', config['xmpp-connect-port'].to_i || 5275
 provider.sock = sock
 
+provider.load_cert config['certificate-chain'].first
+provider.load_key config['private-key-path']
+
 def sock.provider=(provider)
 	@provider = provider
 end
@@ -39,7 +42,7 @@ def sock.rand_id
 	"#{(rand*10000).to_i}-#{(rand*100).to_i}"
 end
 def sock.send_raw(packet)
-	$stdout.puts "Sent: \e[2;34m#{packet}\e[0m" if packet.size > 1
+	$stdout.puts "Sent: \e[2;35m#{packet}\e[0m" if packet.size > 1
 	print packet
 	packet
 end
@@ -98,8 +101,6 @@ end
 if config['ping']
 	provider << Server.new(provider, config['ping'], config['ping'])
 end
-
-provider.load_cert config['certificate-chain'].first
 
 sock.send_raw '<stream:stream xmlns="jabber:component:accept" xmlns:stream="http://etherx.jabber.org/streams" to="' + provider.name + '">'
 
@@ -207,13 +208,19 @@ until sock.closed?
 					puts "#{from} requested a certificate"
 					
 					node = (packet/'pubsub/items/signer-request').first
-					p node['wavelet-name'] =~ /^(.+)\/w\+(.+)\/(.+)$/
+					node['wavelet-name'] =~ /^(.+)\/w\+(.+)\/(.+)$/
 					wave_domain, wave_name, wavelet_name = $1, $2, $3
 					wave_domain.sub!('wave://', '')
 					
 					wave = provider["#{wave_domain}/w+#{wave_name}"]
 					if wave
-						delta = wave[node['version'].to_i]
+						version = node['version'].to_i + 1
+						version += 1 until delta = wave[version]
+						p version
+						p delta.signer_id
+						p decode64(node['signer-id'])
+						p delta.hash
+						p decode64(node['history-hash'])
 						
 						domain = provider.domain
 						domain = $1 if delta.is_a?(Delta) && delta.author =~ /^.+@(.+)$/
@@ -224,10 +231,17 @@ until sock.closed?
 						elsif !domain
 							puts 'Unknown domain for that delta.'
 							
-						elsif delta.signer_id == decode64(node['signer-id']) && delta.hash == decode64(node['history-hash'])
-							puts "Sending a cert to #{from} on request, for #{wave.path}"
+						elsif delta.is_a?(FakeDelta) || delta.signer_id == decode64(node['signer-id']) && delta.hash == decode64(node['history-hash'])
+						
+							server = provider
 							
-							sock.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{provider.certificate}]]></certificate></signature></items></pubsub>"
+							if delta.is_a?(Delta) && delta.author =~ /@(.+)$/ && provider.servers[$1.downcase]
+								server = provider.servers[$1.downcase]
+							end
+							
+							puts "Sending a cert to #{from} on request, for #{server.domain}"
+							
+							sock.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{server.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{server.certificate}]]></certificate></signature></items></pubsub>"
 							
 						else
 							puts 'Delta signer/hash doesn\'t match the request.'

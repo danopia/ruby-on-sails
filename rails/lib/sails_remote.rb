@@ -40,7 +40,7 @@ class SailsRemote
 	# Returns a list of waves from all servers
 	def all_waves
 		waves = []
-		waves += @provider.waves.values
+		#waves += @provider.waves.values
 		@provider.servers.each_value do |server|
 			waves += server.waves.values
 		end
@@ -76,6 +76,7 @@ class Server
 	
 	# Create a new server.
 	def initialize(provider, domain, name=nil)
+		p domain, name
 		@provider = provider
 		@certificate = nil
 		@certificate_hash = nil
@@ -121,7 +122,7 @@ class Server
 			@waves[item.name] = item
 			
 		else
-			0/0 # Yay for error handling
+			1/0 # Yay for error handling
 		end
 	end
 	
@@ -169,7 +170,7 @@ end
 # Most popular class. Represents the local server and the waves on it, and
 # keeps a list of external servers.
 class Provider < Server
-	attr_accessor :sock, :servers
+	attr_accessor :sock, :servers, :key
 	
 	# Create a new provider.
 	def initialize(domain, subdomain='wave')
@@ -178,15 +179,22 @@ class Provider < Server
 		puts "#{subdomain}#{domain}"
 		super self, domain, "#{subdomain}#{domain}"
 		
-		
 		@sock = nil
 		@servers = ServerList.new
+		@servers[@domain] = self
 		
 		# load_cert("#{@domain}.cert")
 	end
 	
 	def load_cert(path)
 		self.certificate = open(path).read.split("\n")[1..-2].join('')
+	end
+	def load_key(path)
+		@key = OpenSSL::PKey::RSA.new(File.open(path).read)
+	end
+	
+	def sign(data)
+		@key.sign OpenSSL::Digest::SHA1.new, data
 	end
 	
 	# Return a wave.
@@ -197,12 +205,13 @@ class Provider < Server
 		if name =~ /^(.+)\/w\+(.+)$/
 			server = @servers[$1.downcase]
 			return nil unless server
+			return @waves[$2] if server == self
 			server[$2]
 		else
 			# allow fallback to not specifing a domain, but search self first
 			return @waves[name] if @waves[name]
 			
-			@servers.values.each do |server|
+			@servers.values.reject{|server|server==self}.each do |server|
 				wave = server[name]
 				return wave if wave
 			end
@@ -223,10 +232,15 @@ class Provider < Server
 				server = Server.new(self, item.host, item.host)
 				self << server
 			end
-			server << item
+			
+			if server == self
+				@waves[item.name] = item
+			else
+				server << item
+			end
 			
 		else
-			0/0 # Yay for error handling
+			1/0 # Yay for error handling
 		end
 	end
 	
@@ -234,9 +248,17 @@ class Provider < Server
 	# if/when you << the Server to the Provider.
 	def init_server server
 		return unless @state == :ready
-		@sock.send_xml 'iq', 'get', server.name || server.domain,
-			'<query xmlns="http://jabber.org/protocol/disco#items"/>'
-		server.state = :sent_item_request
+		target = server.name || server.domain
+		if target == 'wavesandbox.com'
+			@sock.send_xml 'iq', 'get', "wave.#{target}",
+				'<query xmlns="http://jabber.org/protocol/disco#info"/>'
+			server.state = :listing
+			server.name = "wave.#{server.domain}"
+		else
+			@sock.send_xml 'iq', 'get', target,
+				'<query xmlns="http://jabber.org/protocol/disco#items"/>'
+			server.state = :sent_item_request
+		end
 	end
 	
 	# Flush all the remote servers.
@@ -244,7 +266,8 @@ class Provider < Server
 		return unless @state == :ready
 		
 		@servers.each_value do |server|
-			if server.state == :uninited
+			if server == self
+			elsif server.state == :uninited
 				@sock.send_xml 'iq', 'get', server.name || server.domain,
 					'<query xmlns="http://jabber.org/protocol/disco#items"/>'
 				server.state = :sent_item_request
@@ -478,11 +501,10 @@ class Delta
 	# on the provider, not in Delta.
 	def signature
 		return @signature if @signature
-		@@private_key ||= OpenSSL::PKey::RSA.new(File.open("#{@wave.provider.domain}.key").read)
 		if @frozen
-			return @signature = @@private_key.sign(OpenSSL::Digest::SHA1.new, delta_raw)
+			return @signature = @wave.provider.sign(delta_raw)
 		else
-			return @@private_key.sign(OpenSSL::Digest::SHA1.new, delta_raw)
+			return @wave.provider.sign(delta_raw)
 		end
 	end
 	
@@ -559,7 +581,10 @@ class Delta
 			targets.uniq!
 			
 			# Don't send back to ourselfs
-			targets.delete @wave.provider.name
+			p targets
+			targets.delete @wave.provider.domain
+			targets.delete 'danopia.net' if @wave.provider.domain == 'wave.danopia.net'
+			p targets
 			
 			# Freeze and pre-render to make this faster, unless there's no targets
 			freeze

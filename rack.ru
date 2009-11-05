@@ -14,7 +14,7 @@ class SailsAdapter
   def call(env)
   	response = @rails.call env
   	return response unless (200..299).include? response[0]
-  	response[2].close # close rails, let it work for more stuff
+  	response[2].close # release rails, let it work for other requests
   	
 		connect # to the remote
 		
@@ -33,11 +33,11 @@ class SailsAdapter
 				@wave = @remote[name]
 				version = @wave.newest_version
 				
-				body = "<html><head></head><body><div id=\"data\">#{escape @wave.to_xml}</div>(at version <span id=\"version\">#{version}</span>)</body></html>"
+				body = "<data>#{escape @wave.to_xml}</data>"#(at version <span id=\"version\">#{version}</span>)</body></html>"
 				
 				env['async.callback'].call [200, {
 					'Cache-Control' => 'no-cache',
-					'Content-Type' => 'text/html; charset=utf-8',
+					'Content-Type' => 'text/xml; charset=utf-8',
 				}, body]
 				
 				env['rack.errors'].write %{%s - %s [%s] "%s %s%s %s" %d\n} % [
@@ -57,49 +57,13 @@ class SailsAdapter
 
   	[-1, {}, []]
   end
-
-	def each
-		version = @wave.newest_version
-		
-		yield "<html><head></head><body><div id=\"data\">#{escape @wave.to_xml}</div>(at version <span id=\"version\">#{version}</span>)</body></html>"
-		
-		#data = data.size.to_s(16) + "\r\n" + data + "\r\n"
-		#env['async.callback'].call [200, headers, wrap(data)]
-		
-		#sleep 5
-		#i = 0
-		#while i < 5
-		#	i += 0.1
-		#	sleep 0.1
-			
-		#	next unless @remote[$1].newest_version > version
-		#	wave = @remote[$1]
-		#	version = wave.newest_version
-		#	data = "<script type=\"text/javascript\">
+  
+	#	data = "<script type=\"text/javascript\">
 #	document.getElementById('data').innerHTML = \"#{escape_js wave.to_xml}\";
 #	document.getElementById('version').innerHTML = \"#{version}\";
 #</script>"
-			
-		#	data = data.size.to_s(16) + "\r\n" + data + "\r\n"
-		#	env['async.callback'].call [200, headers, wrap(data)]
-		#end
-		
-		#yield "<script type=\"text/javascript\">window.location.reload();</script>"
-		#yield "<script type=\"text/javascript\">alert('hi');</script>"
-		
-		#data = data.size.to_s(16) + "\r\n" + data + "\r\n0\r\n\r\n"
-		
-		#[200, headers, data]
-		
-		
-		#term = "\r\n"
-		#@body.each do |chunk|
-		#	size = bytesize(chunk)
-		#	next if size == 0
-		#	yield [size.to_s(16), term, chunk, term].join
-		#end
-		#yield ["0", term, "", term].join
-	end
+	
+	#yield "<script type=\"text/javascript\">window.location.reload();</script>"
   
   def escape text
   	text.gsub('<', '&lt;').gsub('>', '&gt;').gsub(/&lt;line by="([^"]+)"&gt;\n&lt;\/line&gt;/, '<br />&lt;\1&gt; ')
