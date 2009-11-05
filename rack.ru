@@ -1,4 +1,5 @@
 require 'pp'
+require 'rails/lib/sails_remote'
 
 class SailsAdapter
 	def initialize(rails_app)
@@ -33,7 +34,11 @@ class SailsAdapter
 				@wave = @remote[name]
 				version = @wave.newest_version
 				
-				body = "<data>#{escape @wave.to_xml}</data>"#(at version <span id=\"version\">#{version}</span>)</body></html>"
+				body = @wave.playback.documents.keys.map do |doc_id|
+					"<p><strong>#{doc_id}</strong></p>\n#{escape @wave.playback.to_xml(doc_id)}"
+				end.join("\n<br/>\n")
+
+				#body = "<data>#{escape @wave.to_xml}</data>"#(at version <span id=\"version\">#{version}</span>)</body></html>"
 				
 				env['async.callback'].call [200, {
 					'Cache-Control' => 'no-cache',

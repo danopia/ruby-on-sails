@@ -23,7 +23,7 @@ class WavesController < ApplicationController
     	@remote.add_delta @wave, delta
     	
 			delta = Delta.new @wave, @address
-			delta << MutateOp.new('main', @wave.playback.create_fedone_line(@address, "Hey there, I'm #{@address} "))
+			delta << MutateOp.new('b+main', @wave.playback.create_fedone_line('b+main', @address, "Hey there, I'm #{@address} "))
     	@remote.add_delta @wave, delta
     end
     
@@ -93,7 +93,7 @@ class WavesController < ApplicationController
 		
 		if @wave.participants.include? @address
 			delta = Delta.new @wave, @address
-			delta << MutateOp.new('main', @wave.playback.create_fedone_line(@address, params[:message]))
+			delta << MutateOp.new(params[:doc], @wave.playback.create_fedone_line(params[:doc], @address, params[:message]))
     	@remote.add_delta(@wave, delta)
     	flash[:notice] = "Your message has been added."
     else

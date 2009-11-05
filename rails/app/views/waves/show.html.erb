@@ -18,19 +18,26 @@
 <hr/>
 <p><strong><a name="contents">Contents</a></strong></p>
 <blockquote id="contents2">
-<% @wave.contents.each do |item| -%>
-<% if item.is_a?(Element) %>
+<% @wave.playback.documents.each_pair do |doc_id, contents| -%>
+	<p><strong><%=h doc_id %></strong></p>
+	<pre><%=h contents.inspect %></pre>
+
+<% contents.each do |item| -%>
+<% if item.is_a?(Element) -%>
 	<p>&lt;<%=h item.attributes['by'] %>&gt;
-<% elsif item.is_a?(String) %>
+<% elsif item.is_a?(String) -%>
 <%=h item %></p>
 <% end -%>
+<% end -%>
+	<hr/>
 <% end -%>
 </blockquote>
 <%= link_to_remote "Update", :update => "contents2", :url => "/waves/#{@wave.name}/ajax" %>
 
 
 <%= form_remote_tag :url => wave_update_path(@wave.name), :complete => "submitted();", :html => {'id' => 'add-form'} %>
-	<%= text_field_tag "message" %>
+	Document ID: <%= text_field_tag 'doc' %><br/>
+	Message: <%= text_field_tag "message" %><br/>
 	<%= submit_tag "Add FedOne line" %>
 </form>
 

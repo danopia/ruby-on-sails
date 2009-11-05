@@ -175,7 +175,7 @@ until provider.sock.closed?
 					
 					node = (packet/'pubsub/items/signer-request').first
 					hash = decode64(node['signer-id'])
-					server = provider.servers.values.accept{|item| item.signature_hash == hash}.first
+					server = provider.servers.values.select{|item| item.signature_hash == hash}.first
 
 					if server
 						puts "Sending a cert to #{from} on request, for #{server.domain}"
