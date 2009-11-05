@@ -1,0 +1,23 @@
+<h2>Discovered Servers</h2>
+<p>Please note that this listing is reset every time the provider restarts.</p>
+
+<table width="98%">
+<tr>
+	<th>Domain</th>
+	<th>Address</th>
+	<th>Status</th>
+	<th>Signer ID</th>
+	<th>Certificate</th>
+</tr>
+
+<% @servers.each do |server| -%>
+<tr>
+	<td><%=h server.domain %></td>
+	<td><%=h server.name %></td>
+	<td><%= server.state %></td>
+	<td><%=h encode64(server.certificate_hash) rescue '--' %></td>
+	<td><%=h server.certificate.subject['CN'] rescue '--' %></td>
+</tr>
+<% end -%>
+
+</table>

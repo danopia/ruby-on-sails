@@ -13,6 +13,8 @@ ActionController::Routing::Routes.draw do |map|
 	map.wave_ajax 'ajax/waves/:id', :controller => 'waves', :action => 'ajax'
 	map.domain_wave 'waves/:domain/:id', :controller => 'waves', :action => 'show',
 	  :requirements => { :domain => %r([^/;,?]+) }
+
+	map.resources :servers
   
   map.login 'login', :controller => 'user_sessions', :action => 'new'
   map.logout 'logout', :controller => 'user_sessions', :action => 'destroy'
