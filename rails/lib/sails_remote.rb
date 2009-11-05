@@ -133,7 +133,7 @@ class Server
 	
 	# Send the queue out (state must be :ready)
 	def flush
-		return false unless @state == :ready && @provider.state == :ready
+		return false unless @state == :ready && @provider.ready?
 		return nil unless @queue && @queue.any?
 		
 		@queue.each do |packet|
@@ -170,12 +170,16 @@ class ServerList < Hash
 		return nil unless server
 		super server.downcase
 	end
+	def << server
+		self[server.domain] = server
+		self[server.name] = server
+	end
 end
 
 # Most popular class. Represents the local server and the waves on it, and
 # keeps a list of external servers.
 class Provider
-	attr_accessor :sock, :servers, :key, :domain, :name, :local, :packet_ids
+	attr_accessor :sock, :servers, :key, :domain, :name, :local, :packet_ids, :ready
 	
 	# Create a new provider.
 	def initialize(domain, subdomain='wave', sock=nil)
@@ -186,14 +190,22 @@ class Provider
 		@servers = ServerList.new
 		@sock = sock
 		@packet_ids = {}
+		@ready = false
 
 		@local = Server.new(self, @domain, @name)
 		@local.state = :local
 		@servers << @local
 	end
+
+	alias ready? ready
+	def ready!
+		return if ready?
+		@ready = true
+		flush
+	end
 	
 	def load_cert(path)
-		@local.certificate = OpenSSL::X509::Certificate.new(open(path).read
+		@local.certificate = OpenSSL::X509::Certificate.new(open(path).read)
 	end
 	def load_key(path)
 		@key = OpenSSL::PKey::RSA.new(File.open(path).read)
@@ -218,7 +230,7 @@ class Provider
 	def send_data data
 		puts "Sent: \e[0;35m#{data}\e[0m" if data.size > 1
 		@sock.print data
-		packet
+		data
 	end
 
 	def send_xml(name, type, to, contents, id=nil)
@@ -229,7 +241,7 @@ class Provider
 			id ||= random_packet_id
 		end
 
-		ids[id] = send_data("<#{name} type=\"#{type}\" id=\"#{id}\" to=\"#{to}\" from=\"#{@name}\">#{contents}</#{name}>")
+		@packet_ids[id] = send_data("<#{name} type=\"#{type}\" id=\"#{id}\" to=\"#{to}\" from=\"#{@name}\">#{contents}</#{name}>")
 		id
 	end
 	
@@ -246,7 +258,7 @@ class Provider
 			# allow fallback to not specifing a domain
 
 			@servers.values.each do |server|
-				return wave if wave = server[name]
+				return server[name] if server[name]
 			end
 			
 			nil
@@ -257,7 +269,7 @@ class Provider
 	def <<(item)
 		if item.is_a? Server
 			@servers[item.domain] = item
-			init_server item if @state == :ready
+			init_server item
 		
 		elsif item.is_a? Wave
 			server = @servers[item.host]
@@ -276,7 +288,7 @@ class Provider
 	# Init a Server connection by pinging it and sending a cert. Called for you
 	# if/when you << the Server to the Provider.
 	def init_server server
-		return unless server.state == :uninited
+		return unless self.ready? && server.state == :uninited
 
 		target = server.name || server.domain
 		if target == 'wavesandbox.com'
@@ -293,7 +305,7 @@ class Provider
 	
 	# Flush all the remote servers.
 	def flush
-		return unless @state == :ready
+		return unless ready?
 		
 		@servers.each_value do |server|
 			if server.state == :uninited
@@ -434,7 +446,7 @@ class Delta
 		@time = Time.now.to_i * 1000
 		@applied = false
 		@frozen = false
-		@signer_id = wave.provider.certificate_hash
+		@signer_id = wave.provider.local.certificate_hash
 	end
 	
 	# Parses an incoming delta, taking the wavelet name (from the XML attribute)
@@ -655,7 +667,7 @@ class Wave
 	
 	def initialize(provider, name=nil, host=nil)
 		@provider = provider
-		@name = name || provider.random_wave_name
+		@name = name || provider.local.random_wave_name
 		@host = host || provider.domain
 		
 		@deltas = {}

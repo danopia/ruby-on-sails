@@ -22,7 +22,7 @@ puts "Loading config"
 config = YAML.load(File.open('sails.conf'))
 provider = Provider.new config['domain-name'], config['service-name']
 
-provider.connect_xmpp config['xmpp-connect-host'], config['xmpp-connect-port'].to_i
+provider.connect_sock config['xmpp-connect-host'], config['xmpp-connect-port'].to_i
 
 provider.load_cert config['certificate-chain'].first
 provider.load_key config['private-key-path']
@@ -47,7 +47,6 @@ config['fixture-waves'].each_pair do |id, data|
 				wave.playback.create_fedone_line(address(delta_data['author'], provider), delta_data['mutate']))
 		end
 		
-		delta.apply
 		wave << delta
 	end
 	
@@ -131,8 +130,7 @@ until provider.sock.closed?
 		
 		if name == 'handshake'
 			puts "Connected to XMPP."
-			provider.state = :ready
-			provider.flush
+			provider.ready! # flushes
 			next
 		end
 		
@@ -321,11 +319,10 @@ until provider.sock.closed?
 							puts "Unknown server."
 						
 						elsif server.state == :details
-#server.state = :ready
-#server.flush
+							server.state = :ponged
 							puts "#{from} ponged, attempting to send my cert (state = :ponged)"
 							
-							provider.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{provider.certificate}]]></certificate></signature></item></publish></pubsub>"
+							provider.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{provider.local.certificate64}]]></certificate></signature></item></publish></pubsub>"
 						
 						else
 							puts "#{from} ACK'ed our previous packet."
