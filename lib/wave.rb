@@ -1,6 +1,6 @@
 
 # Represents a Wave, either local or remote.
-class Wave
+class Sails::Wave
 	attr_accessor :provider, :host, :name, :deltas, :playback
 	
 	def initialize(provider, name=nil, host=nil)

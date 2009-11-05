@@ -1,5 +1,7 @@
 require 'drb'
 
+# Not inside the module, might move it later if the rails autoloader would still work
+
 # A class that's focused for use with DRb. There are a few methods that just
 # call deeper methods, since DRb only sends method calls to the server if
 # called on the main DRbObject. If it weren't for these methods, a DRb client
@@ -58,7 +60,7 @@ class SailsRemote
 	# Add a delta to a wave (faster to give the wave's name). Also propagates the
 	# delta.
 	def add_delta(wave, delta)
-		if wave.is_a? Wave
+		if wave.is_a? Sails::Wave
 			wave << delta# unless wave.deltas.include?(delta)
 			wave = wave.name
 		end

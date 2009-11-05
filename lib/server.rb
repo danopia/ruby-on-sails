@@ -1,4 +1,5 @@
-require 'openssl'
+
+module Sails
 
 # Represents a server, remote or local, and tracks certificates, waves, and the
 # queue of packets to send to a server once a connection is established.
@@ -83,5 +84,7 @@ class Server
 		name = Server.random_name(length) while self[name]
 		name
 	end
-end
+end # class
+
+end # module
 

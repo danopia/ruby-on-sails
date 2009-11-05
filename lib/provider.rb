@@ -1,4 +1,5 @@
-require 'openssl'
+
+module Sails
 
 class ServerList < Hash
 	def [](server)
@@ -158,5 +159,7 @@ class Provider
 			end
 		end
 	end
-end
+end # class
+
+end # module
 

@@ -1,4 +1,6 @@
 
+module Sails
+
 # Represents a certain version of a Wave. Starts at version 0 and can be played
 # back, version by version, to HEAD. At any step, you can grab participants,
 # XML representation, etc.
@@ -54,9 +56,9 @@ class Playback
 		puts "Applying delta #{version} to #{@wave.path}"
 		
 		delta.operations.each do |op|
-			@participants += op.who if op.is_a? AddUserOp
-			@participants -= op.who if op.is_a? RemoveUserOp
-			apply_mutate(op) if op.is_a? MutateOp
+			@participants += op.who if op.is_a? Operations::AddUser
+			@participants -= op.who if op.is_a? Operations::RemoveUser
+			apply_mutate(op) if op.is_a? Operations::Mutate
 		end
 		
 		@version = version
@@ -174,7 +176,7 @@ class Playback
 			end
 		end
 	end
-end
+end # class
 
 class Element
 	attr_accessor :type, :attributes
@@ -183,3 +185,5 @@ class Element
 		@attributes = {}
 	end
 end
+
+end # module

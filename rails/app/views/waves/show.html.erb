@@ -23,7 +23,7 @@
 	<pre><%=h contents.inspect %></pre>
 
 <% contents.each do |item| -%>
-<% if item.is_a?(Element) -%>
+<% if item.is_a?(Sails::Element) -%>
 	<p>&lt;<%=h item.attributes['by'] %>&gt;
 <% elsif item.is_a?(String) -%>
 <%=h item %></p>

@@ -9,13 +9,7 @@ require 'pp'
 require 'yaml'
 
 require 'sails'
-
-def encode64(data)
-	Base64.encode64(data).gsub("\n", '')
-end
-def decode64(data)
-	Base64.decode64(data)
-end
+include Sails
 
 puts "Loading config"
 config = YAML.load(File.open('sails.conf'))
@@ -39,10 +33,10 @@ config['fixture-waves'].each_pair do |id, data|
 	data['deltas'].each do |delta_data|
 		delta = Delta.new(wave, address(delta_data['author'], provider))
 		
-		delta << AddUserOp.new(address(delta_data['add'], provider)) if delta_data['add']
-		delta << RemoveUserOp.new(address(delta_data['remove'], provider)) if delta_data['remove']
+		delta << Operations::AddUser.new(address(delta_data['add'], provider)) if delta_data['add']
+		delta << Operations::RemoveUser.new(address(delta_data['remove'], provider)) if delta_data['remove']
 		if delta_data['mutate']
-			delta << MutateOp.new('main', 
+			delta << Operations::Mutate.new('main', 
 				wave.playback.create_fedone_line('main', address(delta_data['author'], provider), delta_data['mutate']))
 		end
 		

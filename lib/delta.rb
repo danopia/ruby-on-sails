@@ -1,4 +1,5 @@
 
+module Sails
 
 # Represents an unknown delta. Used for the fake "version 0" and for gaps in
 # history, so we can store hashes without storing anything else.
@@ -193,7 +194,9 @@ class Delta
 	# Delta.parse.
 	#
 	# TODO: Handle each server better. (Queue, ping, etc.)
-	def propagate applied=false
+	def propagate(applied=false)
+		freeze
+
 		if @wave.local?
 			wave.playback.apply self
 			
@@ -214,13 +217,9 @@ class Delta
 			targets.uniq!
 			
 			# Don't send back to ourselfs
-			p targets
 			targets.delete @wave.provider.domain
 			targets.delete 'danopia.net' if @wave.provider.domain == 'wave.danopia.net'
-			p targets
 			
-			# Freeze and pre-render to make this faster, unless there's no targets
-			freeze
 			return if targets.empty?
 			
 			packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(self.to_applied)}]]></applied-delta></wavelet-update></item></items></event>"
@@ -240,18 +239,12 @@ class Delta
 			end
 	
 		else # Then it's remote; send out the request
-			freeze
 			@wave.provider.servers[@wave.host] << ['iq', 'set', 
 				"<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"wavelet\"><item><submit-request xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><delta wavelet-name=\"#{@wave.conv_root_path}\"><![CDATA[#{encode64(self.to_s)}]]></delta></submit-request></item></publish></pubsub>"]
 			puts "Queued a packet for #{@wave.host}"
 		end
 	end
 	
-	def encode64(data)
-		Base64.encode64(data).gsub("\n", '')
-	end
-	def decode64(data)
-		Base64.decode64(data)
-	end
-end
+end # class
 
+end # module

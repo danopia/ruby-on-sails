@@ -1,4 +1,5 @@
 
+module Sails::Operations
 
 # Represents the addition of a participant to a wave.
 #
@@ -12,7 +13,7 @@
 # 	operation = AddUserOp.new(['echoey@acmewave.com', 'meep@acmewave.com'])
 # 	operation.to_s #=> 'Added echoey@acmewave.com, meep@acmewave.com to the wave'
 # 	operation.to_hash #=> {0 => ['echoey@danopia.net', 'meep@acmewave.com'']}
-class AddUserOp
+class AddUser
 	attr_accessor :who
 	
 	def initialize(who)
@@ -41,7 +42,7 @@ end
 # 	operation = RemoveUserOp.new(['echoey@acmewave.com', 'meep@acmewave.com'])
 # 	operation.to_s #=> 'Removed echoey@acmewave.com, meep@acmewave.com from the wave'
 # 	operation.to_hash #=> {1 => ['echoey@danopia.net', 'meep@acmewave.com'']}
-class RemoveUserOp
+class RemoveUser
 	attr_accessor :who
 	
 	def initialize(who)
@@ -59,7 +60,7 @@ class RemoveUserOp
 end
 
 # Represents the mutation of the contents of a wavelet. TODO: Fix and document!
-class MutateOp
+class Mutate
 	attr_accessor :document_id, :components
 	
 	def initialize(document_id=nil, components=[])
@@ -87,4 +88,6 @@ class MutateOp
 		components.last.values.first
 	end
 end
+
+end # module
 

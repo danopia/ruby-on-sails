@@ -1,6 +1,8 @@
 require File.join(File.dirname(__FILE__), 'protobuffer')
 
-class WaveProtoBuffer < ProtoBuffer
+module Sails
+
+class ProtoBuffer < ProtoBuffer
 
 	##########################
 	# Core structures
@@ -104,4 +106,7 @@ class WaveProtoBuffer < ProtoBuffer
 		9 => replace_attributes,
 		10 => update_attributes
 	}
-end
+end # class
+
+end # module
+
