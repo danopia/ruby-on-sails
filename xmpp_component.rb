@@ -1,4 +1,3 @@
-require 'socket'
 require 'digest/sha1'
 require 'digest/sha2'
 
@@ -7,8 +6,6 @@ require 'hpricot'
 
 require 'base64'
 require 'pp'
-require 'openssl'
-require 'drb'
 require 'yaml'
 
 require 'wave_proto'
@@ -25,40 +22,10 @@ puts "Loading config"
 config = YAML.load(File.open('sails.conf'))
 provider = Provider.new config['domain-name'], config['service-name']
 
-puts "Connecting to #{config['xmpp-connect-host']}:#{config['xmpp-connect-port']} as #{provider.name}..."
-sock = TCPSocket.new config['xmpp-connect-host'] || 'localhost', config['xmpp-connect-port'].to_i || 5275
-provider.sock = sock
+provider.connect_xmpp config['xmpp-connect-host'], config['xmpp-connect-port'].to_i
 
 provider.load_cert config['certificate-chain'].first
 provider.load_key config['private-key-path']
-
-def sock.provider=(provider)
-	@provider = provider
-end
-def sock.ids
-	@ids ||= {}
-end
-def sock.rand_id
-	"#{(rand*10000).to_i}-#{(rand*100).to_i}"
-end
-def sock.send_raw(packet)
-	$stdout.puts "Sent: \e[2;35m#{packet}\e[0m" if packet.size > 1
-	print packet
-	packet
-end
-def sock.send_xml(name, type, to, contents, id=nil)
-	if type.to_i > 0 || type =~ /^purple.+/
-		id = type
-		type = 'result'
-	else
-		id ||= rand_id
-	end
-	
-	ids[id] = send_raw("<#{name} type=\"#{type}\" id=\"#{id}\" to=\"#{to}\" from=\"#{@provider.name}\">#{contents}</#{name}>")
-	id
-end
-
-sock.provider = provider
 
 #################
 # Load fixtures
@@ -80,7 +47,7 @@ config['fixture-waves'].each_pair do |id, data|
 				wave.playback.create_fedone_line(address(delta_data['author'], provider), delta_data['mutate']))
 		end
 		
-		delta.freeze
+		delta.apply
 		wave << delta
 	end
 	
@@ -102,9 +69,9 @@ if config['ping']
 	provider << Server.new(provider, config['ping'], config['ping'])
 end
 
-sock.send_raw '<stream:stream xmlns="jabber:component:accept" xmlns:stream="http://etherx.jabber.org/streams" to="' + provider.name + '">'
+provider.send_data '<stream:stream xmlns="jabber:component:accept" xmlns:stream="http://etherx.jabber.org/streams" to="' + provider.name + '">'
 
-message = sock.recv 1024
+message = provider.sock.recv 1024
 puts "Recieved: \e[33m#{message}\e[0m"
 doc = Hpricot(message)
 
@@ -123,14 +90,11 @@ end
 
 key = Digest::SHA1.hexdigest(id + config['xmpp-password'])
 
-sock.send_raw "<handshake>#{key}</handshake>"
+provider.send_data "<handshake>#{key}</handshake>"
 
 puts 'Setting up keepalive thread'
 Thread.new do
-	while sleep 60
-		sock.send_raw ' '
-		#puts 'Sent a space'
-	end
+	provider.send_data(' ') while sleep 60
 end
 
 remote = SailsRemote.serve(provider)
@@ -141,8 +105,8 @@ puts 'Entering program loop'
 
 ids = {} # used for history requests
 incomplete = ''
-until sock.closed?
-	message = incomplete + sock.recv(10000)
+until provider.sock.closed?
+	message = incomplete + provider.sock.recv(10000)
 	puts "Recieved: \e[33m#{message}\e[0m"
 	
 	if !message || message.empty?
@@ -182,9 +146,9 @@ until sock.closed?
 			when [:iq, :get]
 				if (packet/'query').any?
 					if (packet/'query').first['xmlns'].include?('items')
-						sock.send_xml 'iq', id, from, "<query xmlns=\"http://jabber.org/protocol/disco#items\"><item jid=\"#{provider.name}\" name=\"#{config['identity']}\"/></query>"
+						provider.send_xml 'iq', id, from, "<query xmlns=\"http://jabber.org/protocol/disco#items\"><item jid=\"#{provider.name}\" name=\"#{config['identity']}\"/></query>"
 					else
-						sock.send_xml 'iq', id, from, "<query xmlns=\"http://jabber.org/protocol/disco#info\"><identity category=\"collaboration\" type=\"google-wave\" name=\"#{config['identity']}\"/><feature var=\"http://waveprotocol.org/protocol/0.2/waveserver\"/></query>"
+						provider.send_xml 'iq', id, from, "<query xmlns=\"http://jabber.org/protocol/disco#info\"><identity category=\"collaboration\" type=\"google-wave\" name=\"#{config['identity']}\"/><feature var=\"http://waveprotocol.org/protocol/0.2/waveserver\"/></query>"
 					end
 					
 				elsif (packet/'pubsub/items/delta-history').any?
@@ -206,7 +170,7 @@ until sock.closed?
 					payload << "<item><commit-notice xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" version=\"#{wave[node['end-version'].to_i].version}\"/></item>"
 					payload << "<item><history-truncated xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" version=\"#{wave[node['end-version'].to_i].version}\"/></item>"
 					
-					sock.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items>#{payload}</items></pubsub>"
+					provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items>#{payload}</items></pubsub>"
 					
 				elsif (packet/'pubsub/items/signer-request').any?
 					puts "#{from} requested a certificate"
@@ -251,7 +215,7 @@ until sock.closed?
 							
 							puts "Sending a cert to #{from} on request, for #{server.domain}"
 							
-							sock.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{server.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{server.certificate}]]></certificate></signature></items></pubsub>"
+							provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{server.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{server.certificate}]]></certificate></signature></items></pubsub>"
 							
 						else
 							puts 'Delta signer/hash doesn\'t match the request.'
@@ -274,14 +238,14 @@ until sock.closed?
 					
 					server.certificate = (packet/'certificate').inner_text
 					
-					sock.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish><item node=\"signer\"><signature-response xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"/></item></publish></pubsub>"
+					provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish><item node=\"signer\"><signature-response xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"/></item></publish></pubsub>"
 				
 				elsif (packet/'publish').any?
 					puts "Publish request from #{from} for one of my waves"
 					node = (packet/'publish/item/submit-request/delta').first
 					delta = Delta.parse(provider, node['wavelet-name'], decode64(node.inner_text))
 					
-					sock.send_xml 'message', id, from, "<received xmlns=\"urn:xmpp:receipts\"/>"
+					provider.send_xml 'message', id, from, "<received xmlns=\"urn:xmpp:receipts\"/>"
 				end
 				
 			when [:iq, :result]
@@ -303,7 +267,7 @@ until sock.closed?
 						end
 						
 						puts "Found wave services on #{from} as #{haswave}, pulling details (state = :listing)"
-						sock.send_xml 'iq', 'get', haswave, '<query xmlns="http://jabber.org/protocol/disco#info"/>'
+						provider.send_xml 'iq', 'get', haswave, '<query xmlns="http://jabber.org/protocol/disco#info"/>'
 					else
 						puts "No wave server found on #{from}"
 					end
@@ -316,7 +280,7 @@ until sock.closed?
 						server.state = :details if server
 						
 						puts "#{from} is Google Wave service (#{node['name']}), sending ping (state = :details)"
-						sock.send_xml 'message', 'normal', from, '<ping xmlns="http://waveprotocol.org/protocol/0.2/waveserver"/><request xmlns="urn:xmpp:receipts"/>'
+						provider.send_xml 'message', 'normal', from, '<ping xmlns="http://waveprotocol.org/protocol/0.2/waveserver"/><request xmlns="urn:xmpp:receipts"/>'
 					else
 						puts "#{from} is NOT a Google Wave service, it's a \"#{node['name']}\"!"
 					end
@@ -357,11 +321,11 @@ until sock.closed?
 							puts "Unknown server."
 						
 						elsif server.state == :details
-server.state = :ready
-server.flush
+#server.state = :ready
+#server.flush
 							puts "#{from} ponged, attempting to send my cert (state = :ponged)"
 							
-							sock.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{provider.certificate}]]></certificate></signature></item></publish></pubsub>"
+							provider.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{provider.certificate}]]></certificate></signature></item></publish></pubsub>"
 						
 						else
 							puts "#{from} ACK'ed our previous packet."
@@ -404,7 +368,7 @@ server.flush
 							puts "Trying the wave. trick on #{from}. (state = :listing)"
 							server.name = "wave.#{server.domain}"
 							server.state = :listing
-							sock.send_xml 'iq', 'get', server.name, '<query xmlns="http://jabber.org/protocol/disco#info"/>'
+							provider.send_xml 'iq', 'get', server.name, '<query xmlns="http://jabber.org/protocol/disco#info"/>'
 						end
 					else
 						puts 'Unknown server.'

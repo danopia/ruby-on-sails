@@ -118,7 +118,7 @@ class Server
 	def <<(item)
 		if item.is_a? Array # packet
 			if @state == :ready
-				@provider.sock.send_xml item[0], item[1], @name, item[2], item[3]
+				@provider.send_xml item[0], item[1], @name, item[2], item[3]
 			else
 				@queue << item
 			end
@@ -137,7 +137,7 @@ class Server
 		return nil unless @queue && @queue.any?
 		
 		@queue.each do |packet|
-			@provider.sock.send_xml packet[0], packet[1], @name, packet[2], packet[3]
+			@provider.send_xml packet[0], packet[1], @name, packet[2], packet[3]
 		end
 		
 		@queue = nil
@@ -175,15 +175,17 @@ end
 # Most popular class. Represents the local server and the waves on it, and
 # keeps a list of external servers.
 class Provider
-	attr_accessor :sock, :servers, :key, :domain, :name, :local
+	attr_accessor :sock, :servers, :key, :domain, :name, :local, :packet_ids
 	
 	# Create a new provider.
-	def initialize(domain, subdomain='wave')
+	def initialize(domain, subdomain='wave', sock=nil)
 		subdomain = "#{subdomain}." if subdomain
 
 		@domain = domain
 		@name = "#{subdomain}#{domain}"
 		@servers = ServerList.new
+		@sock = sock
+		@packet_ids = {}
 
 		@local = Server.new(self, @domain, @name)
 		@local.state = :local
@@ -199,6 +201,36 @@ class Provider
 	
 	def sign(data)
 		@key.sign OpenSSL::Digest::SHA1.new, data
+	end
+
+	# Create a socket to the XMPP server
+	def connect_sock(host='localhost', port=5275)
+		@sock.close if @sock && !@sock.closed?
+
+		puts "Connecting to XMPP server at #{host}:#{port}"
+		@sock = TCPSocket.new host, port
+	end
+
+	def random_packet_id
+		"#{(rand*10000).to_i}-#{(rand*100).to_i}"
+	end
+
+	def send_data data
+		puts "Sent: \e[0;35m#{data}\e[0m" if data.size > 1
+		@sock.print data
+		packet
+	end
+
+	def send_xml(name, type, to, contents, id=nil)
+		if type.to_i > 0 || type =~  /^purple/
+			id = type
+			type = 'result'
+		else
+			id ||= random_packet_id
+		end
+
+		ids[id] = send_data("<#{name} type=\"#{type}\" id=\"#{id}\" to=\"#{to}\" from=\"#{@name}\">#{contents}</#{name}>")
+		id
 	end
 	
 	# Return a wave.
@@ -248,12 +280,12 @@ class Provider
 
 		target = server.name || server.domain
 		if target == 'wavesandbox.com'
-			@sock.send_xml 'iq', 'get', "wave.#{target}",
+			send_xml 'iq', 'get', "wave.#{target}",
 				'<query xmlns="http://jabber.org/protocol/disco#info"/>'
 			server.state = :listing
 			server.name = "wave.#{server.domain}"
 		else
-			@sock.send_xml 'iq', 'get', target,
+			send_xml 'iq', 'get', target,
 				'<query xmlns="http://jabber.org/protocol/disco#items"/>'
 			server.state = :sent_item_request
 		end
@@ -798,7 +830,7 @@ class Playback
 				"<#{item.type}#{attribs}>"
 				
 			else
-				raise SailsError, "unknown document 
+				raise SailsError, "unknown document content type: #{item.class}"
 			end
 		end.join("\n")
 	end
