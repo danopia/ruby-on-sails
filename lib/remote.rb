@@ -1,0 +1,69 @@
+require 'drb'
+
+# A class that's focused for use with DRb. There are a few methods that just
+# call deeper methods, since DRb only sends method calls to the server if
+# called on the main DRbObject. If it weren't for these methods, a DRb client
+# wouldn't be able to do much.
+class SailsRemote
+	attr_accessor :drb, :provider
+	
+	# Serve a remote up
+	def self.serve(provider, host=':9000')
+		remote = SailsRemote.new(provider)
+		remote.drb = DRb.start_service("druby://#{host}", remote)
+		remote
+	end
+	
+	# Connect to a remote
+	def self.connect(host=':9000')
+		DRbObject.new nil, "druby://#{host}"
+	end
+	
+	# Create a remote for the provider
+	def initialize(provider)
+		@provider = provider
+		@drb = nil
+	end
+	
+	# DRb's URI
+	def uri
+		@drb.uri if @drb
+	end
+	
+	# Shuts down the DRb server
+	def stop_service
+		@drb.stop_service if @drb
+		@drb = nil
+	end
+	
+	# Returns a list of waves from all servers
+	def all_waves
+		waves = []
+		#waves += @provider.waves.values
+		@provider.servers.each_value do |server|
+			waves += server.waves.values
+		end
+		waves
+	end
+	
+	# Look up and return a wave
+	def [](name)
+		@provider[name]
+	end
+	# Add a wave
+	def <<(wave)
+		@provider << wave
+	end
+	
+	# Add a delta to a wave (faster to give the wave's name). Also propagates the
+	# delta.
+	def add_delta(wave, delta)
+		if wave.is_a? Wave
+			wave << delta# unless wave.deltas.include?(delta)
+			wave = wave.name
+		end
+		self[wave] << delta
+		delta.propagate
+	end
+end
+

@@ -1,4 +1,4 @@
-require 'protobuffer'
+require File.join(File.dirname(__FILE__), 'protobuffer')
 
 class WaveProtoBuffer < ProtoBuffer
 

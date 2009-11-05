@@ -1,5 +1,5 @@
 require 'pp'
-require 'rails/lib/sails_remote'
+require 'sails'
 
 class SailsAdapter
 	def initialize(rails_app)

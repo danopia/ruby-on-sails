@@ -8,8 +8,7 @@ require 'base64'
 require 'pp'
 require 'yaml'
 
-require 'wave_proto'
-require 'rails/lib/sails_remote'
+require 'sails'
 
 def encode64(data)
 	Base64.encode64(data).gsub("\n", '')
