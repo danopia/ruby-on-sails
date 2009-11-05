@@ -1,5 +1,8 @@
-#require 'openssl'
+require 'openssl'
 require 'drb'
+
+class SailsError < RuntimeError; end
+class ProviderError < SailsError; end
 
 # A class that's focused for use with DRb. There are a few methods that just
 # call deeper methods, since DRb only sends method calls to the server if

@@ -111,8 +111,14 @@ doc = Hpricot(message)
 id = (doc/'stream:stream').first['id']
 
 unless id
-	puts "Unable to connect to XMPP. The server denied the component."
-	exit
+	error = (doc/'stream:error').first.children.first.name rescue nil
+	message = case error
+		when 'conflict': 'The XMPP server denied this component because it conflicts with one that is already connected.'
+		when nil: 'Unable to connect to XMPP. The server denied the component for an unknown reason.'
+		else; "Unable to connect to XMPP: #{error}"
+	end
+#	puts "\e[1;31mERROR\e[0;31m: #{message}\e[0"
+	raise ProviderError, message
 end
 
 key = Digest::SHA1.hexdigest(id + config['xmpp-password'])
@@ -362,12 +368,14 @@ server.flush
 						if (packet/'event/items/item/wavelet-update').any?
 							wave = nil
 							(packet/'event/items/item/wavelet-update').each do |update|
+								next unless (update/'applied-delta').any?
+								
 								delta = Delta.parse(provider, update['wavelet-name'], decode64(update.inner_text), true)
 								puts "Got delta version #{delta.version}"
 								wave = delta.wave
 							end
 							
-							wave.playback.apply(:newest) if wave.complete?(ids)
+							wave.playback.apply(:newest) if wave && wave.complete?(ids)
 						end
 						
 						sock.send_xml 'message', 'normal', from, '<received xmlns="urn:xmpp:receipts"/>', id
