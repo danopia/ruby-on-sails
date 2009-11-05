@@ -146,13 +146,11 @@ until sock.closed?
 	puts "Recieved: \e[33m#{message}\e[0m"
 	
 	if !message || message.empty?
-		puts 'Connection closed.'
-		exit
+		raise ProviderError, 'XMPP component connection closed unexpectantly.'
 	
 	elsif message.include? '</stream:stream>'
-		puts "Server closed the XMPP component connection."
 		remote.stop_service
-		exit
+		raise ProviderError, 'Server closed the XMPP component connection.'
 	end
 	
 	doc = Hpricot("<packet>#{message}<done/></packet>")
@@ -220,8 +218,14 @@ until sock.closed?
 					
 					wave = provider["#{wave_domain}/w+#{wave_name}"]
 					if wave
-						version = node['version'].to_i + 1
-						version += 1 until delta = wave[version]
+						#version = node['version'].to_i + 1
+						#version += 1 until delta = wave[version]
+						
+						delta = wave.deltas.values.select{|item| item.hash == decode64(node['history-hash']) }
+						pp delta.size
+						delta = delta.first
+						version = delta.version
+
 						p version
 						p delta.signer_id
 						p decode64(node['signer-id'])
@@ -237,7 +241,7 @@ until sock.closed?
 						elsif !domain
 							puts 'Unknown domain for that delta.'
 							
-						elsif delta.is_a?(FakeDelta) || delta.signer_id == decode64(node['signer-id']) && delta.hash == decode64(node['history-hash'])
+						elsif delta.is_a?(FakeDelta) || (delta.signer_id == decode64(node['signer-id']) && delta.hash == decode64(node['history-hash']))
 						
 							server = provider
 							
