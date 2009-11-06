@@ -20,9 +20,9 @@
 <blockquote id="contents2">
 <% @wave.playback.documents.each_pair do |doc_id, contents| -%>
 	<p><strong><%=h doc_id %></strong></p>
-	<pre><%=h contents.inspect %></pre>
 
 <% contents.each do |item| -%>
+	<pre><%=h item.inspect %></pre>
 <% if item.is_a?(Sails::Element) -%>
 	<p>&lt;<%=h item.attributes['by'] %>&gt;
 <% elsif item.is_a?(String) -%>

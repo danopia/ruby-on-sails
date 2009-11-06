@@ -1,6 +1,7 @@
 require 'drb'
 
-# Not inside the module, might move it later if the rails autoloader would still work
+# Not inside the module, might move it later if the rails autoloader would
+# still work.
 
 # A class that's focused for use with DRb. There are a few methods that just
 # call deeper methods, since DRb only sends method calls to the server if
@@ -41,11 +42,10 @@ class SailsRemote
 	# Returns a list of waves from all servers
 	def all_waves
 		waves = []
-		#waves += @provider.waves.values
 		@provider.servers.each_value do |server|
 			waves += server.waves.values
 		end
-		waves
+		waves.uniq
 	end
 	
 	# Look up and return a wave

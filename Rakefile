@@ -24,3 +24,8 @@ end
 
 desc 'Restart the running thin instance (if none, just starts one)'
 task 'thin:restart' => ['thin:stop', 'thin:start']
+
+desc 'Generate RDoc documentation for lib/'
+task 'rdoc' do
+	sh "rdoc -t 'RDoc Documentation for Ruby on Sails' -E ru=rb -U lib"
+end

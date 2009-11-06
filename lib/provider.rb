@@ -1,6 +1,7 @@
 
 module Sails
 
+# Variation of Hash with a degree of case-insensitive keys.
 class ServerList < Hash
 	def [](server)
 		return nil unless server
@@ -42,24 +43,30 @@ class Provider
 	end
 
 	alias ready? ready
+	
+	# Marks the provider as ready and flushes all queued packets.
 	def ready!
 		return if ready?
 		@ready = true
 		flush
 	end
 	
+	# Load the provider's certificate from a file.
 	def load_cert(path)
 		@local.certificate = OpenSSL::X509::Certificate.new(open(path).read)
 	end
+	
+	# Load the provider's private key from a file.
 	def load_key(path)
 		@key = OpenSSL::PKey::RSA.new(File.open(path).read)
 	end
 	
+	# Signs a chunk of data using the private key.
 	def sign(data)
 		@key.sign OpenSSL::Digest::SHA1.new, data
 	end
 
-	# Create a socket to the XMPP server
+	# Create a socket to the XMPP server.
 	def connect_sock(host='localhost', port=5275)
 		@sock.close if @sock && !@sock.closed?
 
@@ -67,16 +74,22 @@ class Provider
 		@sock = TCPSocket.new host, port
 	end
 
+	# Generated a random packet ID for XMPP in the form of ####-##.
 	def random_packet_id
 		"#{(rand*10000).to_i}-#{(rand*100).to_i}"
 	end
 
+	# Sends a data chunk to the XMPP server and logs it to console.
 	def send_data data
 		puts "Sent: \e[0;35m#{data}\e[0m" if data.size > 1
 		@sock.print data
 		data
 	end
 
+	# Sends a frankenstein's monster XML packet down to the XMPP server.
+	#
+	# Pass a packet ID in the +type+ field to make it into a 'result' with the
+	# correct ID.
 	def send_xml(name, type, to, contents, id=nil)
 		if type.to_i > 0 || type =~  /^purple/
 			id = type
@@ -89,7 +102,7 @@ class Provider
 		id
 	end
 	
-	# Return a wave.
+	# Look up a wave.
 	#
 	# Can be passed in domain/w+name format for a certain wave, or name format
 	# to search all known waves.

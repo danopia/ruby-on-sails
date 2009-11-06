@@ -21,26 +21,28 @@ class Server
 	def certificate=(cert)
 		cert = OpenSSL::X509::Certificate.new(cert) if cert.is_a? String
 		@certificate = cert
-		@certificate_hash = Digest::SHA2.digest "0\202\003\254#{@certificate.to_der}"
+		@certificate_hash = sha2 "0\202\003\254#{@certificate.to_der}"
 	end
 
+	# Returns a Base64-encoded certificate, ready for sending in XML packets.
 	def certificate64
 		encode64 @certificate.to_der
 	end
 	
+	# Sets the server name.
 	def name=(new_name)
 		@provider.servers.delete @name unless !@name || @name == @domain
-		@provider.servers[new_name] = self # it handles downcase
+		@provider.servers[new_name] = self
 		
 		@name = new_name
 	end
 	
-	# Return a wave.
+	# Look up a wave.
 	#
-	# Must be passed only the name, i.e. you must pass "w+meep" to get meep. No
+	# Must be passed only the name, i.e. you must pass "meep" to get meep. No
 	# domains will be handled.
 	def [](name)
-		return @waves[name] if @waves.has_key?(name)
+		@waves[name]
 	end
 	
 	# Add a wave to the server's listing -or- queue/send a packet.

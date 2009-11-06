@@ -5,28 +5,35 @@ class ApplicationController < ActionController::Base
 	
 	protected
 
+	# Is the user currently logged in? Basically the same as +current_user+
+	# except that this method always returns a boolean value.
   def logged_in?
 		return current_user ? true : false
 	end
 	
+	# Require an account. Redirects to the login page if the user is logged out.
+	# Best used with before_filter.
 	def require_user
-		unless current_user
-			store_location
-			flash[:notice] = "You must be logged in to access this page"
-			redirect_to login_path
-			return false
-		end
+		return true if current_user
+	
+		store_location
+		flash[:notice] = "You must be logged in to access this page"
+		redirect_to login_path
+		false
 	end
 
+	# This is a funny little method. It requires that a user be signed out to
+	# view a page, and logs them out if they are logged in.
 	def require_no_user
-		if current_user
-			store_location
-			flash[:notice] = "You must be logged out to access this page"
-			redirect_to logout_path
-			return false
-		end
+		return true unless current_user
+		
+		store_location
+		flash[:notice] = "You must be logged out to access this page"
+		redirect_to logout_path
+		false
 	end
 	
+	# Stores the current location. Used for redirection.
 	def store_location
 		session[:return_to] = request.request_uri
 	end
@@ -48,11 +55,14 @@ class ApplicationController < ActionController::Base
 		return @current_user_session if defined?(@current_user_session)
 		@current_user_session = UserSession.find
 	end
+	
+	# Gets the current user's account.
 	def current_user
 		return @current_user if defined?(@current_user)
 		@current_user = current_user_session && current_user_session.user
 	end
 	
+	# Connect the SailsRemote. Also sets @address to the current user's address.
 	def connect_remote
 		unless @remote
 			@remote = SailsRemote.connect

@@ -1,5 +1,7 @@
 require 'stringio'
 
+# Custom Ruby ProtoBuffer implementation with a DSL-like structure syntax. I'll
+# document it later.
 class ProtoBuffer
 	####################
 	# Decoding

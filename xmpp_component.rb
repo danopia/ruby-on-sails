@@ -1,10 +1,6 @@
-require 'digest/sha1'
-require 'digest/sha2'
-
 require 'rubygems'
 require 'hpricot'
 
-require 'base64'
 require 'pp'
 require 'yaml'
 

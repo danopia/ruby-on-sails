@@ -2,6 +2,7 @@ require File.join(File.dirname(__FILE__), 'protobuffer')
 
 module Sails
 
+# Defines a Google Wave ProtoBuffer.
 class ProtoBuffer < ProtoBuffer
 
 	##########################

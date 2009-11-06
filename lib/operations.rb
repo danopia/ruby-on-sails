@@ -16,15 +16,18 @@ module Sails::Operations
 class AddUser
 	attr_accessor :who
 	
-	def initialize(who)
+	# Create a new AddUser operation, with the specified users being added.
+	def initialize(who=[])
 		who = [who] unless who.is_a? Array
 		@who = who
 	end
 	
+	# Create a hash, for use in ProtoBuffer encoding methods.
 	def to_hash
 		{:added => @who}
 	end
 	
+	# Human-readable string; i.e. "Added me@danopia.net to the wave"
 	def to_s
 		"Added #{@who.join(', ')} to the wave"
 	end
@@ -45,15 +48,18 @@ end
 class RemoveUser
 	attr_accessor :who
 	
-	def initialize(who)
+	# Create a new RemoveUser operation, with the specified users being added.
+	def initialize(who=[])
 		who = [who] unless who.is_a? Array
 		@who = who
 	end
 	
+	# Create a hash, for use in ProtoBuffer encoding methods.
 	def to_hash
 		{:removed => @who}
 	end
 	
+	# Human-readable string; i.e. "Removed me@danopia.net from the wave"
 	def to_s
 		"Removed #{@who.join(', ')} from the wave"
 	end
@@ -73,8 +79,8 @@ class Mutate
 	def self.parse(data)
 		doc = data[:document_id]
 		components = data[:mutation][:components]
-		p MutateOp.new(doc, components)
-		MutateOp.new(doc, components)
+		p Mutate.new(doc, components)
+		Mutate.new(doc, components)
 	end
 	
 	def to_hash

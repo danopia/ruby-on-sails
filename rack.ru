@@ -82,7 +82,13 @@ use Rack::CommonLogger
 
 rails_app = Rack::Adapter::Rails.new(:root => './rails')
 
-app = Rack::URLMap.new('/ajax'  => SailsAdapter.new(rails_app),
-                       '/' => rails_app)
+mapping = {'/ajax'  => SailsAdapter.new(rails_app),
+           '/' => rails_app}
+
+if File.exists? File.join(File.dirname(__FILE__), 'doc')
+	mapping['/doc'] = Rack::File.new('./doc')
+end
+
+app = Rack::URLMap.new(mapping)
 
 run app

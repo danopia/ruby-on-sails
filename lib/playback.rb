@@ -7,25 +7,28 @@ module Sails
 class Playback
 	attr_accessor :wave, :version, :participants, :documents
 	
+	# Creates a new Playback instance for a wave. Without a version param, it
+	# defaults to starting at version 0. This is useful for playing through a
+	# wave step-by-step. You can also pass :newest, a Delta, or a version number,
+	# as it's passed right to Playback#apply.
 	def initialize(wave, version=0)
 		@wave = wave
 		@version = 0
 		@participants = []
 		@documents = {}
 		
-		self.apply version if version > 0
+		self.apply version if version != 0
 	end
 	
+	# Returns true if this Playback instance is at the latest version of the
+	# wave.
 	def at_newest?
 		@version == @wave.newest_version
 	end
 	
-	def apply(version=nil)
-		if !version
-			puts "No target version"
-			return false
-		end
-		
+	# Applies the specified delta, including any before it if necesary. Shortcuts
+	# are :next and :newest. You can also use a version number.
+	def apply(version)
 		if !version.is_a?(Delta) && !version.is_a?(FakeDelta)
 			if version == :next
 				version = @version + 1
@@ -64,6 +67,8 @@ class Playback
 		@version = version
 	end
 	
+	# Dumps the current version of this Playback instance to XML. Note that said
+	# XML probably won't be value XML in practice.
 	def to_xml(document_id='main')
 		element_stack = []
 		@documents[document_id].map do |item|
@@ -101,6 +106,7 @@ class Playback
 		end
 	end
 	
+	# Hackity hack
 	def create_fedone_line(doc, author, text)
 		doc = @documents[doc] ||= [] unless doc.is_a? Array
 		if self.item_count(doc) > 0
@@ -178,6 +184,7 @@ class Playback
 	end
 end # class
 
+# Represents an element starting tag.
 class Element
 	attr_accessor :type, :attributes
 	def initialize(type=nil)

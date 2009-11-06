@@ -2,7 +2,7 @@
 module Sails
 
 # Represents an unknown delta. Used for the fake "version 0" and for gaps in
-# history, so we can store hashes without storing anything else.
+# history, so we can store hashes without storing any other details.
 class FakeDelta
 	attr_accessor :wave, :version, :hash
 	
@@ -15,7 +15,8 @@ class FakeDelta
 		@hash = hash || "#{wave.conv_root_path}"
 	end
 	
-	# Easier than adding more if's
+	# Returns an array containing only :noop. Easier than adding more if's to
+	# logic elsewhere.
 	def operations
 		[:noop]
 	end
@@ -51,11 +52,11 @@ class Delta
 	def self.parse provider, wavelet, data, applied=false
 		timestamp = nil
 		if applied
-			data = WaveProtoBuffer.parse(:applied_delta, data) if data.is_a? String
+			data = Sails::ProtoBuffer.parse(:applied_delta, data) if data.is_a? String
 			timestamp = data[:timestamp]
 			data = data[:signed_delta]
 		else
-			data = WaveProtoBuffer.parse(:signed_delta, data) if data.is_a? String
+			data = Sails::ProtoBuffer.parse(:signed_delta, data) if data.is_a? String
 		end
 		
 		wavelet.sub! 'wave://', ''
@@ -93,11 +94,11 @@ class Delta
 			details = operation.values.first
 			case type
 				when :added
-					delta << AddUserOp.new(details)
+					delta << Operations::AddUser.new(details)
 				when :removed
-					delta << RemoveUserOp.new(details)
+					delta << Operations::RemoveUser.new(details)
 				when :mutate
-					delta << MutateOp.parse(details)
+					delta << Operations::Mutate.parse(details)
 			end
 		end
 		
@@ -108,21 +109,23 @@ class Delta
 		delta
 	end
 	
+	# Add an operation to the delta.
 	def <<(operation)
 		@operations << operation
 		@version += 1
 	end
 	
 	# Dumps the raw delta to a hash. Not ready to send out, but used for
-	# signing and hashing.
+	# signing and building the full packets.
 	def delta_data
 		{	:applied_to => prev_version,
 			:author => @author,
 			:operations => @operations.map{|op|op.to_hash}}
 	end
 	
+	# Dumps the raw delta to a ProtoBuffer string. Used for signing.
 	def delta_raw
-		WaveProtoBuffer.encode(:delta, delta_data)
+		Sails::ProtoBuffer.encode(:delta, delta_data)
 	end
 	
 	# Helper method to return a hash of the previous version/hash.
@@ -131,8 +134,7 @@ class Delta
 			:hash => prev_hash}
 	end
 	
-	# Signs the +raw+ bytestring using the provider's key. TODO: Store the key
-	# on the provider, not in Delta.
+	# Signs the +raw+ bytestring using the provider's key.
 	def signature
 		return @signature if @signature
 		if @frozen
@@ -142,10 +144,11 @@ class Delta
 		end
 	end
 	
-	# Get a non-"applied delta", ready to send to a wave's master server.
+	# Build a ProtoBuffer string of the delta in "non-applied" form, used to send
+	# deltas to a wave's master server.
 	def to_s
 		return @to_s if @to_s && @frozen
-		@to_s = WaveProtoBuffer.encode(:signed_delta, {
+		@to_s = Sails::ProtoBuffer.encode(:signed_delta, {
 			:delta => delta_data,
 			:signature => {
 				:signature => signature,
@@ -155,10 +158,10 @@ class Delta
 		})
 	end
 	
-	# Get an "applied delta", ready to send out to others.
+	# Get an "applied delta", ready to send out to slave servers.
 	def to_applied
 		return @to_applied if @to_applied && @frozen
-		@to_applied = WaveProtoBuffer.encode(:applied_delta, {
+		@to_applied = Sails::ProtoBuffer.encode(:applied_delta, {
 			:signed_delta => to_s,
 			:applied_to => prev_version,
 			:operations_applied => @operations.size, # operations applied
@@ -204,7 +207,7 @@ class Delta
 			
 			# Tell people who were removed (is this right?)
 			@operations.each do |op|
-				next unless op.is_a? RemoveUserOp
+				next unless op.is_a? Operations::RemoveUser
 				people += op.who
 			end
 			

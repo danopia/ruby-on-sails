@@ -1,8 +1,12 @@
 
+module Sails
+
 # Represents a Wave, either local or remote.
-class Sails::Wave
+class Wave
 	attr_accessor :provider, :host, :name, :deltas, :playback
 	
+	# Create a new wave. +name+ defaults to a random value and +host+ defaults
+	# to the local provider's name.
 	def initialize(provider, name=nil, host=nil)
 		@provider = provider
 		@name = name || provider.local.random_wave_name
@@ -19,20 +23,20 @@ class Sails::Wave
 		@playback.apply :newest unless @playback.at_newest?
 		@playback.participants
 	end
-	# Shortcut to PlayBack#contents
-	def contents
+	# Shortcut to PlayBack#documents
+	def documents
 		@playback.apply :newest unless @playback.at_newest?
-		@playback.contents
+		@playback.documents
 	end
 	# Shortcut to PlayBack#to_xml
-	def to_xml
+	def to_xml doc_id='main'
 		@playback.apply :newest unless @playback.at_newest?
-		@playback.to_xml
+		@playback.to_xml doc_id
 	end
 	
 	# Returns a sorted list of all real deltas that this server has.
 	def real_deltas
-		@deltas.values.select{|delta| delta.is_a? Delta}.sort{|a, b| b.version <=> a.version}
+		@deltas.values.select{|delta| delta.is_a? Delta}.sort{|a, b| a.version <=> b.version}
 	end
 	
 	# Builds a wave path in the form of host/w+wave
@@ -99,5 +103,6 @@ class Sails::Wave
 		
 		false
 	end
-end
+end # class
 
+end # module
