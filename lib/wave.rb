@@ -2,8 +2,8 @@
 module Sails
 
 # Represents a Wave, either local or remote.
-class Wave
-	attr_accessor :provider, :host, :name, :deltas, :playback
+class Wave < Playback
+	attr_accessor :provider, :host, :name, :deltas
 	
 	# Create a new wave. +name+ defaults to a random value and +host+ defaults
 	# to the local provider's name.
@@ -11,27 +11,11 @@ class Wave
 		@provider = provider
 		@name = name || provider.local.random_wave_name
 		@host = host || provider.domain
-		
 		@deltas = {}
-		@playback = Playback.new(self)
+		
+		super self
 		
 		self << FakeDelta.new(self)
-	end
-	
-	# Shortcut to PlayBack#participants
-	def participants
-		@playback.apply :newest unless @playback.at_newest?
-		@playback.participants
-	end
-	# Shortcut to PlayBack#documents
-	def documents
-		@playback.apply :newest unless @playback.at_newest?
-		@playback.documents
-	end
-	# Shortcut to PlayBack#to_xml
-	def to_xml doc_id='main'
-		@playback.apply :newest unless @playback.at_newest?
-		@playback.to_xml doc_id
 	end
 	
 	# Returns a sorted list of all real deltas that this server has.
@@ -50,6 +34,7 @@ class Wave
 		"#{path}/conv+root"
 	end
 	
+	alias blip []
 	# Returns a certain delta, by version number.
 	def [](version)
 		@deltas[version]
@@ -58,7 +43,7 @@ class Wave
 	# Adds a delta to the wave.
 	def <<(delta)
 		@deltas[delta.version] = delta
-		playback.apply delta if complete?
+		apply delta if complete?
 	end
 	
 	# Returns the latest version number. Faster than newest.version

@@ -11,10 +11,10 @@
 <% end -%>
 
 <p><em>Participants:</em> <%=h wave.participants.join(', ') %></p>
-<% wave.playback.documents.each_key do |doc_id| %>
-<p><em><%=h doc_id %>:</em> <%=h wave.playback.documents[doc_id].select{|item| item.is_a? String}.join(' ') %></p>
+<% wave.blips.flatten.each do |blip| %>
+<p><em><%=h blip.name %>:</em> <%=h blip.select{|item| item.is_a? String}.join(' ') %></p>
 <% end %>
 
-<p>Have <%=h wave.real_deltas.size %> updates</p>
+<p>Have <%=h wave.real_deltas.size %> deltas</p>
 
 <% end -%>

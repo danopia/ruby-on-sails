@@ -5,7 +5,7 @@ module Sails
 # back, version by version, to HEAD. At any step, you can grab participants,
 # XML representation, etc.
 class Playback
-	attr_accessor :wave, :version, :participants, :documents
+	attr_accessor :wave, :version, :participants, :blips, :conv
 	
 	# Creates a new Playback instance for a wave. Without a version param, it
 	# defaults to starting at version 0. This is useful for playing through a
@@ -15,7 +15,8 @@ class Playback
 		@wave = wave
 		@version = 0
 		@participants = []
-		@documents = {}
+		@blips = []
+		@conv = []
 		
 		self.apply version if version != 0
 	end
@@ -36,7 +37,6 @@ class Playback
 			end
 			
 			version = @wave.newest_version if version == :newest
-			#pp @wave.deltas
 			delta = @wave[version]
 		else
 			delta = version
@@ -61,100 +61,34 @@ class Playback
 		delta.operations.each do |op|
 			@participants += op.who if op.is_a? Operations::AddUser
 			@participants -= op.who if op.is_a? Operations::RemoveUser
-			apply_mutate(op) if op.is_a? Operations::Mutate
+			if op.is_a? Operations::Mutate
+				if op.document_id == 'conversation'
+					self.apply_conv_mutate(op.components)
+				else
+					self.blip(op.document_id).apply_mutate(delta.author, op.components) 
+				end
+			end
 		end
 		
 		@version = version
 	end
 	
-	# Dumps the current version of this Playback instance to XML. Note that said
-	# XML probably won't be value XML in practice.
-	def to_xml(document_id='main')
-		element_stack = []
-		@documents[document_id].map do |item|
-			if item.is_a? String
-				item
-				
-			elsif item == :end
-				"</#{element_stack.pop}>"
-				
-			elsif item.is_a? Element
-				element_stack << item.type
-				
-				attribs = ''
-				item.attributes.each_pair do |key, value|
-					attribs << " #{key}=\"#{value}\""
-				end
-				
-				"<#{item.type}#{attribs}>"
-				
-			else
-				raise SailsError, "unknown document content type: #{item.class}"
-			end
-		end.join("\n")
-	end
-	
-	# Size of the wave's contents, strings are the number of bytes and everything
-	# else counts as one
-	def item_count(doc)
-		doc.inject(0) do |total, item|
-			if item.is_a? String
-				next total + item.size
-			else
-				next total + 1
-			end
-		end
-	end
-	
-	# Hackity hack
-	def create_fedone_line(doc, author, text)
-		doc = @documents[doc] ||= [] unless doc.is_a? Array
-		if self.item_count(doc) > 0
-			[{:retain_item_count=>self.item_count(doc)},
-			 {:element_start=>
-				{:type=>"line",
-				 :attributes=>
-					[{:value=>author, :key=>"by"}]}},
-			 {:element_end=>true},
-			 {:characters=>text}]
-		else
-			[{:element_start=>
-				{:type=>"line",
-				 :attributes=>
-					[{:value=>author, :key=>"by"}]}},
-			 {:element_end=>true},
-			 {:characters=>text}]
-		end
+	# Look up a blip or create it
+	def [] blip_id
+		blips = @blips.flatten.select {|blip| blip.name == blip_id}
+		return blips.first if blips.any?
+		
+		Blip.new blip_id
 	end
 	
 	protected
 	
 	# Apply a mutation. Does NO version checking!
-	#
-	# TODO: Handle mid-string stuff. Might add a whole class for mutations.
-	def apply_mutate(operation)
-		doc = @documents[operation.document_id] ||= []
-		
-		item = 0 # in the 'contents' array
-		index = 0 # in a string
-		operation.components.compact.each do |component|
+	def apply_conv_mutate(operations)
+		item = 0 # in the 'conv' array
+		operations.compact.each do |component|
 			if component[:retain_item_count]
-				advance = component[:retain_item_count]
-				until advance == 0
-					if !doc[item].is_a?(String)
-						advance -= 1
-						item += 1
-						index = 0
-					elsif (doc[item].size - index) <= advance
-						advance -= (doc[item].size - index)
-						item += 1
-						index = 0
-					else # advance within current string
-						index += advance
-						advance = 0
-					end
-				end
-				puts "Advanced #{component[:retain_item_count]} items"
+				item += component[:retain_item_count]
 			
 			elsif component[:element_start]
 				element = Element.new(component[:element_start][:type])
@@ -162,35 +96,37 @@ class Playback
 					element.attributes[attribute[:key]] = attribute[:value]
 				end
 				
-				doc.insert(item, element)
+				@conv.insert(item, element)
 				item += 1
-				index = 0
 			
 			elsif component[:element_end]
-				doc.insert(item, :end)
+				@conv.insert(item, :end)
 				item += 1
-				index = 0
-			
-			elsif component[:characters]
-				doc.insert(item, component[:characters])
-				item += 1
-				index = 0
-			
-			elsif component[:delete_chars]
-				doc.delete_at(item)
-				index = 0
 			end
 		end
+		
+		read_conv
 	end
+	
+	def read_conv
+		stack = [[]]
+		
+		@conv.each do |item|
+			if item.is_a? Element
+				stack.last << self[item.attributes['id']]
+				stack.push []
+			elsif item == :end
+				arr = stack.pop
+				stack.last << arr if arr.any?
+			end
+		end
+		
+		puts "New conversation structure:"
+		pp stack.first
+		
+		@blips = stack
+	end
+	
 end # class
-
-# Represents an element starting tag.
-class Element
-	attr_accessor :type, :attributes
-	def initialize(type=nil)
-		@type = type
-		@attributes = {}
-	end
-end
 
 end # module

@@ -201,7 +201,7 @@ class Delta
 		freeze
 
 		if @wave.local?
-			wave.playback.apply self
+			wave.apply self
 			
 			people = wave.participants
 			

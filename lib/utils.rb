@@ -4,18 +4,21 @@ require 'base64'
 require 'digest/sha1'
 require 'digest/sha2'
 
-# Monkey-patch in some convenience methods.
-class OpenSSL::X509::Name
-	# Shortcut to look up a value.
-	def [](key)
-		to_hash[key]
-	end
+# Monkey-patch in some convenience methods. The module is seperately defined
+# for RDoc.
+module OpenSSL #:nodoc: all
+	class X509::Name
+		# Shortcut to look up a value.
+		def [](key)
+			to_hash[key]
+		end
 
-	# Convert the Name object in a Hash.
-	def to_hash
-		to_a.inject({}) do |hash, pair|
-			hash[pair.first] = pair[1]
-			hash
+		# Convert the Name object in a Hash.
+		def to_hash
+			to_a.inject({}) do |hash, pair|
+				hash[pair.first] = pair[1]
+				hash
+			end
 		end
 	end
 end

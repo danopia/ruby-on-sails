@@ -18,19 +18,11 @@
 <hr/>
 <p><strong><a name="contents">Contents</a></strong></p>
 <blockquote id="contents2">
-<% @wave.playback.documents.each_pair do |doc_id, contents| -%>
-	<p><strong><%=h doc_id %></strong></p>
-
-<% contents.each do |item| -%>
-	<pre><%=h item.inspect %></pre>
-<% if item.is_a?(Sails::Element) -%>
-	<p>&lt;<%=h item.attributes['by'] %>&gt;
-<% elsif item.is_a?(String) -%>
-<%=h item %></p>
-<% end -%>
-<% end -%>
+<% @wave.blips.flatten.each do |blip| -%>
+	<p><strong><%=h blip.name %></strong></p>
+<%= blip.to_xml %>
 	<hr/>
-<% end -%>
+<% end -%>:
 </blockquote>
 <%= link_to_remote "Update", :update => "contents2", :url => "/waves/#{@wave.name}/ajax" %>
 

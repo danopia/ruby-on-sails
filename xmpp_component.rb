@@ -32,8 +32,8 @@ config['fixture-waves'].each_pair do |id, data|
 		delta << Operations::AddUser.new(address(delta_data['add'], provider)) if delta_data['add']
 		delta << Operations::RemoveUser.new(address(delta_data['remove'], provider)) if delta_data['remove']
 		if delta_data['mutate']
-			delta << Operations::Mutate.new('main', 
-				wave.playback.create_fedone_line('main', address(delta_data['author'], provider), delta_data['mutate']))
+			delta << Operations::Mutate.new('b+main', 
+				wave.blip('b+main').create_fedone_line(address(delta_data['author'], provider), delta_data['mutate']))
 		end
 		
 		wave << delta
@@ -259,7 +259,7 @@ until provider.sock.closed?
 						puts "Got a delta, version #{delta.version}"
 					end
 					
-					wave.playback.apply :newest
+					wave.apply :newest
 				end
 			
 			when [:message, :normal], [:message, :none]
@@ -292,7 +292,7 @@ until provider.sock.closed?
 								wave = delta.wave
 							end
 							
-							wave.playback.apply(:newest) if wave && wave.complete?(ids)
+							wave.apply(:newest) if wave && wave.complete?(ids)
 						end
 						
 						provider.send_xml 'message', 'normal', from, '<received xmlns="urn:xmpp:receipts"/>', id

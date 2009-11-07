@@ -14,8 +14,6 @@ class WavesController < ApplicationController
 		end
 		
 		@wave = @remote[params[:id]]
-		#render :text => @remote[params[:id]].inspect
-		#return
 		
 		unless @wave.participants.include? @address
 			delta = Sails::Delta.new @wave, @address
@@ -23,7 +21,7 @@ class WavesController < ApplicationController
     	@remote.add_delta @wave, delta
     	
 			delta = Sails::Delta.new @wave, @address
-			delta << Sails::Operations::Mutate.new('b+main', @wave.playback.create_fedone_line('b+main', @address, "Hey there, I'm #{@address} "))
+			delta << Sails::Operations::Mutate.new('b+main', @wave.blip('b+main').create_fedone_line(@address, "Hey there, I'm #{@address} "))
     	@remote.add_delta @wave, delta
     end
     
@@ -37,55 +35,6 @@ class WavesController < ApplicationController
 		end
 		
 		render :text => 'OK'
-		
-		#
-		#if params[:message] && params[:message].size > 0
-		#	delta = Delta.new @wave, @address
-		#	#components = @wave.playback.create_fedone_line(@address, params[:message])
-		#	total = 0
-		#	start = 0
-		#	old = nil
-		#	@wave.contents.each do |content|
-		#		if content.is_a? String
-		#			if old == :next
-		#				old = content
-		#				start = total
-		#			end
-		#			total += content.size
-		#		elsif content.is_a? Element
-		#			total += 1
-		#			if content.attributes['by'] == @address
-		#				old = :next
-		#			end
-		#		else
-		#			total += 1
-		#		end
-		#	end
-		#	
-		#	components = [{:retain_item_count => start},
-		#	 {:delete_chars => old},
-		#	 {:characters => params[:message]},
-		#	 {:retain_item_count => total - start}]
-		#	 
-		#	delta << MutateOp.new('main', components)
-    #	@remote.add_delta(@wave, delta)
-    #end
-		
-		#version = @wave.newest_version
-		#i = 0
-		
-		#while @remote[params[:id]].newest_version == version
-			#sleep 1
-			
-			#i += 1
-			#if i > 5
-			#	render :text => @wave.to_xml.gsub('<line', '<br')
-			#	return
-			#end
-			
-		#end
-		#	@wave = @remote[params[:id]]
-  	#render :text => @wave.to_xml.gsub(/<line by="([^"]+)">\n<\/line>/, '<br/>&lt;\1&gt; ')
   end
 
   def update
@@ -93,7 +42,7 @@ class WavesController < ApplicationController
 		
 		if @wave.participants.include? @address
 			delta = Sails::Delta.new @wave, @address
-			delta << Sails::Operations::Mutate.new(params[:doc], @wave.playback.create_fedone_line(params[:doc], @address, params[:message]))
+			delta << Sails::Operations::Mutate.new(params[:doc], @wave.blip(params[:doc]).create_fedone_line(@address, params[:message]))
     	@remote.add_delta(@wave, delta)
     	flash[:notice] = "Your message has been added."
     else

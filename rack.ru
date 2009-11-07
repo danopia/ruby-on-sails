@@ -34,11 +34,9 @@ class SailsAdapter
 				@wave = @remote[name]
 				version = @wave.newest_version
 				
-				body = @wave.playback.documents.keys.map do |doc_id|
-					"<p><strong>#{doc_id}</strong></p>\n#{escape @wave.playback.to_xml(doc_id)}"
-				end.join("\n<br/>\n")
-
-				#body = "<data>#{escape @wave.to_xml}</data>"#(at version <span id=\"version\">#{version}</span>)</body></html>"
+				body = @wave.blips.flatten.map do |blip|
+					"<p><strong>#{doc_id}</strong></p>\n#{escape blip.to_xml}\n<hr/>"
+				end.join("\n")
 				
 				env['async.callback'].call [200, {
 					'Cache-Control' => 'no-cache',
@@ -57,7 +55,6 @@ class SailsAdapter
 				
 			end
 		
-			
 		end
 
   	[-1, {}, []]
@@ -71,7 +68,7 @@ class SailsAdapter
 	#yield "<script type=\"text/javascript\">window.location.reload();</script>"
   
   def escape text
-  	text.gsub('<', '&lt;').gsub('>', '&gt;').gsub(/&lt;line by="([^"]+)"&gt;\n&lt;\/line&gt;/, '<br />&lt;\1&gt; ')
+  	text.gsub('<', '&lt;').gsub('>', '&gt;')
   end
   def escape_js text
   	escape(text).gsub('\\', '\\\\').gsub('"', '\\"').gsub("\n", ' ')
