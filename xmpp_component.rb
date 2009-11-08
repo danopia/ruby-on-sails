@@ -7,13 +7,17 @@ require 'yaml'
 require 'sails'
 include Sails
 
+#pp decode64('d2F2ZTovL29yaWVudC1sb2RnZS5jb20vdytpVDBPcFp2b292N2gvY29udityb290')
+#pp Sails::ProtoBuffer.parse(:applied_delta, decode64('CuMDCrYBChgIMxIU+JsmFu+nsNLOvl9P9Beg79CtbVsSG3B1YmxpY3dhdmVAb3JpZW50LWxvZGdlLmNvbRoOGgwKCGIrRlF4ZWQwEgAaMxoxCghiK0ZReGVkMBIlCggaBgoEYm9keQoIGgYKBGxpbmUKAiABCgcSBSEhISEhCgIgARo4GjYKDGNvbnZlcnNhdGlvbhImCgIoIQoYGhYKBGJsaXASDgoCaWQSCGIrRlF4ZWQwCgIgAQoCKAESpwIKgAKSU6jj1MnCBCSYgJPiULh+TGFrij97ejktteYr3+0F72jUYsui2HXAqFsv6681e+B8547druKRMgBqQkSva8Lzf5fyW2kK8ppvipEX+0y8Xc/EPyf1yUkvbppfQxIlDHA/TgWM6/fH9XbqsoD1c7oc5P+TDtlENMuZFql6CLFrzsT1/54C03VEnDP9h9FQWHKeC4ZuM3qPSgBLVyH3ofaj+WsTogiXRnEoxg/FcD0yBTnfG8tHgoJ7ctd5WcHu07ybINlkQbJRLTBSFfWk/NPTPSR04/0lADfQ5URVBuk63cH/I6lwlRioh7naHHHwhFAWJxW30GbfdEfEL6KT7WO1EiCwRZ85bGXYJ2RdIMd9G7k/vpENKwGKvT6MvQeN9eQ2hxgBEhgIMxIU+JsmFu+nsNLOvl9P9Beg79CtbVsYAyDA9cSNzSQ='))
+#exit
+
 puts "Loading config"
 config = YAML.load(File.open('sails.conf'))
 provider = Provider.new config['domain-name'], config['service-name']
 
 provider.connect_sock config['xmpp-connect-host'], config['xmpp-connect-port'].to_i
 
-provider.load_cert config['certificate-chain'].first
+provider.load_certs config['certificate-chain']
 provider.load_key config['private-key-path']
 
 #################
@@ -24,6 +28,7 @@ def address(address, provider)
 end
 
 config['fixture-waves'].each_pair do |id, data|
+next
 	wave = Wave.new(provider, id)
 	
 	data['deltas'].each do |delta_data|
@@ -72,12 +77,10 @@ unless id
 		when nil: 'Unable to connect to XMPP. The server denied the component for an unknown reason.'
 		else; "Unable to connect to XMPP: #{error}"
 	end
-#	puts "\e[1;31mERROR\e[0;31m: #{message}\e[0"
 	raise ProviderError, message
 end
 
 key = Digest::SHA1.hexdigest(id + config['xmpp-password'])
-
 provider.send_data "<handshake>#{key}</handshake>"
 
 puts 'Setting up keepalive thread'
@@ -95,12 +98,13 @@ ids = {} # used for history requests
 incomplete = ''
 until provider.sock.closed?
 	message = incomplete + provider.sock.recv(10000)
-	puts "Recieved: \e[33m#{message}\e[0m"
 	
 	if !message || message.empty?
+		puts "Recieved: \e[33m#{message}\e[0m"
 		raise ProviderError, 'XMPP component connection closed unexpectantly.'
 	
 	elsif message.include? '</stream:stream>'
+		puts "Recieved: \e[33m#{message}\e[0m"
 		remote.stop_service
 		raise ProviderError, 'Server closed the XMPP component connection.'
 	end
@@ -112,6 +116,8 @@ until provider.sock.closed?
 		next
 	end
 	incomplete = ''
+	
+	puts "Recieved: \e[33m#{message}\e[0m"
 	
 	doc.root.children.each do |packet|
 		name = packet.name
@@ -127,6 +133,8 @@ until provider.sock.closed?
 		id = packet['id']
 		from = packet['from']
 		to = packet['to']
+		
+		server = provider.servers.find_or_create from
 		
 		case [name.to_sym, type.to_sym]
 		
@@ -169,7 +177,11 @@ until provider.sock.closed?
 					if server
 						puts "Sending a cert to #{from} on request, for #{server.domain}"
 							
-						provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{server.certificate.subject['CN']}\" algorithm=\"SHA256\"><certificate><![CDATA[#{server.certificate64}]]></certificate></signature></items></pubsub>"
+						payload = server.certificates64.map do |cert|
+							"<certificate><![CDATA[#{cert}]]></certificate>"
+						end.join ''
+							
+						provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{server.certificates.first.subject['CN']}\" algorithm=\"SHA256\"><#{payload}</signature></items></pubsub>"
 					else
 						puts 'Couldn\'t find the signer ID.' # TODO: Send error packet
 					end
@@ -180,12 +192,8 @@ until provider.sock.closed?
 				if (packet/'certificate').any?
 					puts "Got a cert from #{from}"
 					
-					server = provider.servers[from.downcase]
-					unless server
-						server = Server.new(provider, (packet/'signature').first['domain'], from.downcase)
-						provider << server
-					end
-					
+					raise SailsError, "#{from} posted a cert for #{(packet/'signature').first['domain']}"
+					server.domain = (packet/'signature').first['domain']
 					server.certificate = (packet/'certificate').inner_text
 					
 					provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish><item node=\"signer\"><signature-response xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"/></item></publish></pubsub>"
@@ -199,8 +207,14 @@ until provider.sock.closed?
 				end
 				
 			when [:iq, :result]
+				if packet.to_s.include? '<query xmlns="http://jabber.org/protocol/disco#items" />'
+					puts "#{from} is a FedOne server. Pulling details (state = :listing)"
+					server.name = from
+					server.domain = server.name.sub('wave.', '') if server.domain == server.name
+					server.state = :listing
+					provider.send_xml 'iq', 'get', from, '<query xmlns="http://jabber.org/protocol/disco#info"/>'
 				
-				if (packet/'query/item').any?
+				elsif (packet/'query/item').any?
 					puts "Got service listing from #{from}:"
 					
 					haswave = false
@@ -210,11 +224,8 @@ until provider.sock.closed?
 					end
 					
 					if haswave
-						server = provider.servers[from.downcase]
-						if server
-							server.name = haswave
-							server.state = :listing
-						end
+						server.name = haswave
+						server.state = :listing
 						
 						puts "Found wave services on #{from} as #{haswave}, pulling details (state = :listing)"
 						provider.send_xml 'iq', 'get', haswave, '<query xmlns="http://jabber.org/protocol/disco#info"/>'
@@ -226,8 +237,7 @@ until provider.sock.closed?
 					node = (packet/'query/identity').first
 					
 					if node['type'] == 'google-wave'
-						server = provider.servers[from.downcase]
-						server.state = :details if server
+						server.state = :details
 						
 						puts "#{from} is Google Wave service (#{node['name']}), sending ping (state = :details)"
 						provider.send_xml 'message', 'normal', from, '<ping xmlns="http://waveprotocol.org/protocol/0.2/waveserver"/><request xmlns="urn:xmpp:receipts"/>'
@@ -235,12 +245,27 @@ until provider.sock.closed?
 						puts "#{from} is NOT a Google Wave service, it's a \"#{node['name']}\"!"
 					end
 				
-				elsif (packet/'pubsub/publish/item/signature-response').any?
-					server = provider.servers[from.downcase]
-					if !server
-						puts "Unknown server."
+				elsif (packet/'signature/certificate').any?
+					node = (packet/'signature').first
+					puts "Got a cert from #{from} for #{node['domain']}"
 					
-					elsif server.state == :ponged
+					server = provider.servers.find_or_create node['domain']
+					
+					server.domain = node['domain']
+					server.certificates = (node/'certificate').map do |cert|
+						cert.inner_text
+					end
+					
+					remote.all_waves.each do |wave|
+						wave.deltas.each_value do |delta|
+							next unless delta.is_a? Delta
+							delta.server = server if delta.signer_id == server.certificate_hash
+							puts "Changed server for #{wave.conv_root_path} ##{delta.version}."
+						end
+					end
+				
+				elsif (packet/'pubsub/publish/item/signature-response').any?
+					if server.state == :ponged
 						server.state = :ready
 						puts "#{from} ACK'ed my cert, now to flush the queue (state = :ready)"
 						server.flush
@@ -266,15 +291,15 @@ until provider.sock.closed?
 				packet.children.each do |message|
 					subtype = message.name
 					if subtype == 'received'
-						server = provider.servers[from.downcase]
-						if !server
-							puts "Unknown server."
-						
-						elsif server.state == :details
+						if server.state == :details
 							server.state = :ponged
 							puts "#{from} ponged, attempting to send my cert (state = :ponged)"
 							
-							provider.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.domain}\" algorithm=\"SHA256\"><certificate><![CDATA[#{provider.local.certificate64}]]></certificate></signature></item></publish></pubsub>"
+							payload = provider.local.certificates64.map do |cert|
+								"<certificate><![CDATA[#{cert}]]></certificate>"
+							end.join ''
+							
+							provider.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.name}\" algorithm=\"SHA256\">#{payload}</signature></item></publish></pubsub>"
 						
 						else
 							puts "#{from} ACK'ed our previous packet."
@@ -288,8 +313,8 @@ until provider.sock.closed?
 								next unless (update/'applied-delta').any?
 								
 								delta = Delta.parse(provider, update['wavelet-name'], decode64(update.inner_text), true)
-								puts "Got delta version #{delta.version}"
-								wave = delta.wave
+								puts "Got delta version #{delta.version rescue -1}"
+								wave = delta.wave if delta
 							end
 							
 							wave.apply(:newest) if wave && wave.complete?(ids)
@@ -308,19 +333,14 @@ until provider.sock.closed?
 			when [:iq, :error]
 				if (packet/'remote-server-not-found').any?
 				
-					server = provider.servers[from.downcase]
-					if server
-						if "wave.#{server.domain}" == server.name
-							puts "Already tried the wave. trick on #{from}. (state = :error)"
-							server.state = :error
-						else
-							puts "Trying the wave. trick on #{from}. (state = :listing)"
-							server.name = "wave.#{server.domain}"
-							server.state = :listing
-							provider.send_xml 'iq', 'get', server.name, '<query xmlns="http://jabber.org/protocol/disco#info"/>'
-						end
+					if "wave.#{server.domain}" == server.name
+						puts "Already tried the wave. trick on #{from}. (state = :error)"
+						server.state = :error
 					else
-						puts 'Unknown server.'
+						puts "Trying the wave. trick on #{from}. (state = :listing)"
+						server.name = "wave.#{server.domain}"
+						server.state = :listing
+						provider.send_xml 'iq', 'get', server.name, '<query xmlns="http://jabber.org/protocol/disco#info"/>'
 					end
 					
 				else

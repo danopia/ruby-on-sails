@@ -59,9 +59,13 @@ class Playback
 		puts "Applying delta #{version} to #{@wave.path}"
 		
 		delta.operations.each do |op|
-			@participants += op.who if op.is_a? Operations::AddUser
+			if op.is_a? Operations::AddUser
+				@participants += op.who
+				pp op.who
+			end
 			@participants -= op.who if op.is_a? Operations::RemoveUser
 			if op.is_a? Operations::Mutate
+				puts "Mutation to #{op.document_id}"
 				if op.document_id == 'conversation'
 					self.apply_conv_mutate(op.components)
 				else

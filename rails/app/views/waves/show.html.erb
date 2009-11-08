@@ -1,4 +1,4 @@
-<h2>Wave: <%=h @wave.name %> (from <%=h @wave.host %>)</h2>
+<h2>Wave: <%=h @wave.name %> (from <%=h @wave.server || (@remote.provider.local).domain %>)</h2>
 
 <% unless @wave.complete? -%>
 <div class="error box">This wave currently has incomplete data. <%= @wave.complete? %></div>

@@ -10,6 +10,7 @@ class WavesController < ApplicationController
 			@wave = Sails::Wave.new(@remote.provider)
 			@remote << @wave
     	redirect_to wave_path(@wave.name)
+    	#render :text => params.inspect
 			return
 		end
 		
@@ -17,12 +18,12 @@ class WavesController < ApplicationController
 		
 		unless @wave.participants.include? @address
 			delta = Sails::Delta.new @wave, @address
-			delta << Sails::Operations::AddUser.new(@address)
+			delta << Sails::Operations::AddUser.new(delta, @address)
     	@remote.add_delta @wave, delta
     	
-			delta = Sails::Delta.new @wave, @address
-			delta << Sails::Operations::Mutate.new('b+main', @wave.blip('b+main').create_fedone_line(@address, "Hey there, I'm #{@address} "))
-    	@remote.add_delta @wave, delta
+			#delta = Sails::Delta.new @wave, @address
+			#delta << Sails::Operations::Mutate.new(delta, 'b+main', @wave.blip('b+main').create_fedone_line(@address, "Hey there, I'm #{@address} "))
+    	#@remote.add_delta @wave, delta
     end
     
   end
@@ -42,7 +43,7 @@ class WavesController < ApplicationController
 		
 		if @wave.participants.include? @address
 			delta = Sails::Delta.new @wave, @address
-			delta << Sails::Operations::Mutate.new(params[:doc], @wave.blip(params[:doc]).create_fedone_line(@address, params[:message]))
+			delta << Sails::Operations::Mutate.new(delta, params[:doc], @wave.blip(params[:doc]).create_fedone_line(@address, params[:message]))
     	@remote.add_delta(@wave, delta)
     	flash[:notice] = "Your message has been added."
     else
@@ -62,7 +63,7 @@ class WavesController < ApplicationController
     	flash[:error] = "#{params[:who]} isn't in this wave."
     else
 			delta = Sails::Delta.new @wave, @address
-			delta << Sails::Operations::RemoveUser.new(params[:who])
+			delta << Sails::Operations::RemoveUser.new(delta, params[:who])
     	@remote.add_delta(@wave, delta)
     	flash[:notice] = "#{params[:who]} has been removed from the wave."
     end
@@ -79,7 +80,7 @@ class WavesController < ApplicationController
     	flash[:error] = "#{params[:who]} is already in this wave."
     else
 			delta = Sails::Delta.new @wave, @address
-			delta << Sails::Operations::AddUser.new(params[:who])
+			delta << Sails::Operations::AddUser.new(delta, params[:who])
     	@remote.add_delta(@wave, delta)
     	flash[:notice] = "#{params[:who]} has been added to the wave."
     end

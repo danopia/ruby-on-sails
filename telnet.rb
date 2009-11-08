@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
 
 require 'gserver'
-require 'wave.danopia.net/lib/sails_remote'
+require 'sails'
 
 class SailsTelnetServer < GServer
 	def initialize(port=23, host='localhost', maxConnections = 20, *args)
@@ -10,10 +10,12 @@ class SailsTelnetServer < GServer
 	end
 	
 	def serve(io)
-		name = nil
+		name = 'telnet'
+		address = "#{name}@#{@remote.provider.domain}"
+		redraw io
 		
 		while true
-			line = name ? io.gets.chomp : '/connect test'
+			line = io.gets.chomp
 			params = line.split ' '
 			next if params.empty?
 			
@@ -22,9 +24,9 @@ class SailsTelnetServer < GServer
 					io.puts 'Bye!'
 					return
 				
-				when '/connect'
+				when '/user'
 					name = params[1]
-					address = "#{name}@#{remote.provider.domain}"
+					address = "#{name}@#{@remote.provider.domain}"
 					io.puts "Connecting as #{address}...."
 					
 					redraw io
@@ -35,14 +37,15 @@ class SailsTelnetServer < GServer
 	
 	def redraw(io)
 		io.print `clear`
-		if @remote.waves.any?
-			io.puts 'Waves:'
+		if @remote.all_waves.any?
+			io.puts "Waves:"
 			i = 0
-			@remote.waves.each_value do |wave|
+			@remote.all_waves.each do |wave|
 				io.puts ' ---+---------------------------------------------------'
-				io.puts "  #{i} |\t#{wave.name}@#{wave.host}"#\t<#{wave[0].author}> #{wave[0].operations.first}"
-				wave.real_deltas.each do |delta|
-					io.puts "    |\t\t\t<#{delta.author}> #{delta.operations.first.to_s}"
+				io.puts "  #{i} |\tw+#{wave.name}@#{wave.host}"#\t<#{wave[0].author}> #{wave[0].operations.first}"
+				p wave.blips
+				wave.blips.flatten.each do |blip|
+					io.puts "    |\t\t\t#{blip.name}: #{Hpricot(blip.to_xml).first_child.inner_text}"
 				end
 				i += 1
 			end

@@ -19,6 +19,7 @@ class SailsRemote
 	
 	# Connect to a remote
 	def self.connect(host=':9000')
+		DRb.start_service
 		DRbObject.new nil, "druby://#{host}"
 	end
 	
@@ -65,7 +66,7 @@ class SailsRemote
 			wave = wave.name
 		end
 		self[wave] << delta
-		delta.propagate
+		#delta.propagate
 	end
 end
 

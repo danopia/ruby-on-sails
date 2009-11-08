@@ -3,6 +3,10 @@ module Sails
 
 # Variation of Hash with a degree of case-insensitive keys.
 class ServerList < Hash
+	def initialize provider
+		@provider = provider
+	end
+	
 	def [](server)
 		return nil unless server
 		super server.downcase
@@ -11,13 +15,28 @@ class ServerList < Hash
 		return nil unless name
 		super name.downcase, server
 	end
-	def delete(server)
+	
+	def delete server
 		return nil unless server
 		super server.downcase
 	end
+	
 	def << server
 		self[server.domain] = server
 		self[server.name] = server
+	end
+	
+	def find_or_create name
+		server = self[name]
+		unless server
+			server = Server.new @provider, name
+			@provider << server
+		end
+		server
+	end
+	
+	def by_signer_id hash
+		values.select{|server| server.certificate_hash == hash}.first
 	end
 end
 
@@ -32,14 +51,13 @@ class Provider
 
 		@domain = domain
 		@name = "#{subdomain}#{domain}"
-		@servers = ServerList.new
+		@servers = ServerList.new self
 		@sock = sock
 		@packet_ids = {}
 		@ready = false
 
-		@local = Server.new(self, @domain, @name)
+		@local = Server.new self, @domain, @name, false
 		@local.state = :local
-		@servers << @local
 	end
 
 	alias ready? ready
@@ -52,8 +70,8 @@ class Provider
 	end
 	
 	# Load the provider's certificate from a file.
-	def load_cert(path)
-		@local.certificate = OpenSSL::X509::Certificate.new(open(path).read)
+	def load_certs(paths)
+		@local.certificates = paths.map {|path| open(path).read }
 	end
 	
 	# Load the provider's private key from a file.
@@ -129,13 +147,7 @@ class Provider
 			init_server item
 		
 		elsif item.is_a? Wave
-			server = @servers[item.host]
-			unless server
-				server = Server.new(self, item.host, item.host)
-				self << server
-			end
-			
-			server << item
+			(item.server || @local) << item
 			
 		else
 			raise ArgumentError, 'expected a Server or Wave'
@@ -146,6 +158,7 @@ class Provider
 	# if/when you << the Server to the Provider.
 	def init_server server
 		return unless self.ready? && server.state == :uninited
+		return if server == @local
 
 		target = server.name || server.domain
 		if target == 'wavesandbox.com'

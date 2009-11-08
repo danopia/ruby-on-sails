@@ -66,7 +66,6 @@ class ApplicationController < ActionController::Base
 	def connect_remote
 		unless @remote
 			@remote = SailsRemote.connect
-			DRb.start_service
 		end
 		
 		@address = "#{current_user.login}@#{@remote.provider.domain}"

@@ -4,29 +4,49 @@ module Sails
 # Represents a server, remote or local, and tracks certificates, waves, and the
 # queue of packets to send to a server once a connection is established.
 class Server
-	attr_accessor :provider, :certificate, :certificate_hash, :domain, :name, :waves, :queue, :state
+	attr_accessor :provider, :certificates, :certificate_hash, :domain, :name, :waves, :queue, :state
 	
 	# Create a new server.
-	def initialize(provider, domain, name=nil)
+	def initialize(provider, domain, name=nil, init=true)
 		@provider = provider
 		@domain = domain
 		@name = name || domain
 		@waves = {}
 		@queue = []
 		@state = :uninited
+		@certificates = []
+		
+		if init
+			provider << self
+		else
+			provider.servers << self
+		end
+	end
+	
+	def certificate= cert
+		self.certificates = [cert]
 	end
 	
 	# Sets the certificate and generates a SHA2 hash in ASN.1/DER format, ready
 	# to send to remote servers.
-	def certificate=(cert)
-		cert = OpenSSL::X509::Certificate.new(cert) if cert.is_a? String
-		@certificate = cert
-		@certificate_hash = sha2 "0\202\003\254#{@certificate.to_der}"
+	def certificates= certs
+		@certificates = certs.map do |cert|
+			if cert.is_a? String
+				unless cert.include? 'BEGIN CERTIFICATE'
+					cert = Base64.encode64(Base64.decode64(cert))
+					cert = "-----BEGIN CERTIFICATE-----\n#{cert}-----END CERTIFICATE-----\n"
+				end
+				cert = OpenSSL::X509::Certificate.new cert
+			end
+			cert
+		end
+		sequence = OpenSSL::ASN1::Sequence.new(@certificates.reverse)
+		@certificate_hash = sha2 sequence.to_der
 	end
 
-	# Returns a Base64-encoded certificate, ready for sending in XML packets.
-	def certificate64
-		encode64 @certificate.to_der
+	# Returns Base64-encoded certificates, ready for sending in XML packets.
+	def certificates64
+		@certificates.map {|cert| encode64 cert.to_der }
 	end
 	
 	# Sets the server name.

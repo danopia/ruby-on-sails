@@ -1,6 +1,30 @@
 
 module Sails::Operations
 
+class Operation
+	attr_accessor :delta
+	
+	def initialize delta=nil
+		@delta = delta
+	end
+	
+	def author
+		@delta.author
+	end
+end
+
+class UserOperation < Operation
+	attr_accessor :who
+	
+	# Create a new user add/remove operation with the specified users..
+	def initialize(delta=nil, who=[])
+		who = [who] unless who.is_a? Array
+		@who = who
+		
+		super delta
+	end
+end
+
 # Represents the addition of a participant to a wave.
 #
 # === Usage ===
@@ -13,15 +37,7 @@ module Sails::Operations
 # 	operation = AddUserOp.new(['echoey@acmewave.com', 'meep@acmewave.com'])
 # 	operation.to_s #=> 'Added echoey@acmewave.com, meep@acmewave.com to the wave'
 # 	operation.to_hash #=> {0 => ['echoey@danopia.net', 'meep@acmewave.com'']}
-class AddUser
-	attr_accessor :who
-	
-	# Create a new AddUser operation, with the specified users being added.
-	def initialize(who=[])
-		who = [who] unless who.is_a? Array
-		@who = who
-	end
-	
+class AddUser < UserOperation
 	# Create a hash, for use in ProtoBuffer encoding methods.
 	def to_hash
 		{:added => @who}
@@ -45,15 +61,7 @@ end
 # 	operation = RemoveUserOp.new(['echoey@acmewave.com', 'meep@acmewave.com'])
 # 	operation.to_s #=> 'Removed echoey@acmewave.com, meep@acmewave.com from the wave'
 # 	operation.to_hash #=> {1 => ['echoey@danopia.net', 'meep@acmewave.com'']}
-class RemoveUser
-	attr_accessor :who
-	
-	# Create a new RemoveUser operation, with the specified users being added.
-	def initialize(who=[])
-		who = [who] unless who.is_a? Array
-		@who = who
-	end
-	
+class RemoveUser < UserOperation
 	# Create a hash, for use in ProtoBuffer encoding methods.
 	def to_hash
 		{:removed => @who}
@@ -66,21 +74,22 @@ class RemoveUser
 end
 
 # Represents the mutation of the contents of a wavelet. TODO: Fix and document!
-class Mutate
+class Mutate < Operation
 	attr_accessor :document_id, :components
 	
-	def initialize(document_id=nil, components=[])
+	def initialize(delta=nil, document_id=nil, components=[])
 		components = [components] unless components.is_a? Array
 		
 		@document_id = document_id
 		@components = components
+		
+		super delta
 	end
 	
-	def self.parse(data)
+	def self.parse(delta, data)
 		doc = data[:document_id]
 		components = data[:mutation][:components]
-		p Mutate.new(doc, components)
-		Mutate.new(doc, components)
+		Mutate.new(delta, doc, components)
 	end
 	
 	def to_hash
@@ -91,7 +100,7 @@ class Mutate
 	end
 	
 	def to_s
-		components.last.values.first
+		components.select {|item| item.is_a? String}.join(' ')
 	end
 end
 
