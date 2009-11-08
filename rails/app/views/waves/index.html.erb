@@ -4,10 +4,10 @@
 
 <% @waves.each do |wave| -%>
 
-<% if wave.host == 'danopia.net' || true -%>
+<% if wave.local? || true -%>
 <h3><%=link_to wave.name, wave_path(wave.name) %></h3>
 <% else -%>
-<h3><%=link_to wave.name, domain_wave_path(wave.name, wave.host) %></h3>
+<h3><%=link_to wave.name, domain_wave_path(wave.name, wave.server.name) %></h3>
 <% end -%>
 
 <p><em>Participants:</em> <%=h wave.participants.join(', ') %></p>
@@ -15,6 +15,6 @@
 <p><em><%=h blip.name %>:</em> <%=h blip.select{|item| item.is_a? String}.join(' ') %></p>
 <% end %>
 
-<p>Have <%=h wave.real_deltas.size %> deltas</p>
+<p>Have <%=h wave.deltas.size %> deltas</p>
 
 <% end -%>

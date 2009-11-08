@@ -84,6 +84,7 @@ class Playback
 		
 		Blip.new blip_id
 	end
+	alias blip []
 	
 	protected
 	
@@ -117,7 +118,7 @@ class Playback
 		
 		@conv.each do |item|
 			if item.is_a? Element
-				stack.last << self[item.attributes['id']]
+				stack.last << self.blip(item.attributes['id'])
 				stack.push []
 			elsif item == :end
 				arr = stack.pop

@@ -43,7 +43,22 @@ class WavesController < ApplicationController
 		
 		if @wave.participants.include? @address
 			delta = Sails::Delta.new @wave, @address
-			delta << Sails::Operations::Mutate.new(delta, params[:doc], @wave.blip(params[:doc]).create_fedone_line(@address, params[:message]))
+			delta << Sails::Operations::Mutate.new(delta, 'conversation', [
+				{:element_start=>{:type=>"conversation"}},
+				{:element_start=>{:type=>"blip", :attributes => [{:value=>'b+main', :key=>"id"}]}},
+				{:element_end => true},
+				{:element_end => true}
+			])
+			delta << Sails::Operations::Mutate.new(delta, 'b+main', [])
+			delta << Sails::Operations::Mutate.new(delta, 'b+main', [
+				{:element_start=>{:type=>"body"}},
+				{:element_start=>{:type=>"line"}},
+				{:element_end => true},
+				{:characters => params[:message]},
+				{:element_end => true}
+			])
+			
+			#delta << Sails::Operations::Mutate.new(delta, params[:doc], @wave.blip(params[:doc]).create_fedone_line(@address, params[:message]))
     	@remote.add_delta(@wave, delta)
     	flash[:notice] = "Your message has been added."
     else

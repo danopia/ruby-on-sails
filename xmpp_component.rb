@@ -190,11 +190,21 @@ until provider.sock.closed?
 				
 			when [:iq, :set]
 				if (packet/'certificate').any?
-					puts "Got a cert from #{from}"
+					node = (packet/'signature').first
+					puts "Got a cert from for #{node['domain']}"
 					
-					raise SailsError, "#{from} posted a cert for #{(packet/'signature').first['domain']}"
-					server.domain = (packet/'signature').first['domain']
-					server.certificate = (packet/'certificate').inner_text
+					server.domain = node['domain']
+					server.certificates = (node/'certificate').map do |cert|
+						cert.inner_text
+					end
+					
+					remote.all_waves.each do |wave|
+						wave.deltas.each_value do |delta|
+							next unless delta.is_a? Delta
+							delta.server = server if delta.signer_id == server.certificate_hash
+							puts "Changed server for #{wave.conv_root_path} ##{delta.version}."
+						end
+					end
 					
 					provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish><item node=\"signer\"><signature-response xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"/></item></publish></pubsub>"
 				
