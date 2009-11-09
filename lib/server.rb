@@ -94,16 +94,10 @@ class Server
 		@queue = nil
 	end
 	
-	# Generate a random alphanumeric string
-	def self.random_name(length=12)
-		@letters ||= ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
-		([''] * length).map { @letters[rand * @letters.size] }.join('')
-	end
-	
 	# Create a unique wave name, accross all waves known to this server
 	def random_wave_name(length=12)
-		name = Server.random_name(length)
-		name = Server.random_name(length) while self[name]
+		name = random_string(length)
+		name = random_string(length) while self[name]
 		name
 	end
 end # class

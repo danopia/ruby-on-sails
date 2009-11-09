@@ -13,7 +13,7 @@ class Wave < Playback
 		@deltas = {}
 		
 		if server.is_a? String
-			server = provider.servers.find_or_create server
+			server = provider.find_or_create_server server
 		end
 		@server = server || provider.local
 		

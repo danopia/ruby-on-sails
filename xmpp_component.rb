@@ -7,67 +7,35 @@ require 'yaml'
 require 'sails'
 include Sails
 
-#pp decode64('d2F2ZTovL29yaWVudC1sb2RnZS5jb20vdytpVDBPcFp2b292N2gvY29udityb290')
-#pp Sails::ProtoBuffer.parse(:applied_delta, decode64('CuMDCrYBChgIMxIU+JsmFu+nsNLOvl9P9Beg79CtbVsSG3B1YmxpY3dhdmVAb3JpZW50LWxvZGdlLmNvbRoOGgwKCGIrRlF4ZWQwEgAaMxoxCghiK0ZReGVkMBIlCggaBgoEYm9keQoIGgYKBGxpbmUKAiABCgcSBSEhISEhCgIgARo4GjYKDGNvbnZlcnNhdGlvbhImCgIoIQoYGhYKBGJsaXASDgoCaWQSCGIrRlF4ZWQwCgIgAQoCKAESpwIKgAKSU6jj1MnCBCSYgJPiULh+TGFrij97ejktteYr3+0F72jUYsui2HXAqFsv6681e+B8547druKRMgBqQkSva8Lzf5fyW2kK8ppvipEX+0y8Xc/EPyf1yUkvbppfQxIlDHA/TgWM6/fH9XbqsoD1c7oc5P+TDtlENMuZFql6CLFrzsT1/54C03VEnDP9h9FQWHKeC4ZuM3qPSgBLVyH3ofaj+WsTogiXRnEoxg/FcD0yBTnfG8tHgoJ7ctd5WcHu07ybINlkQbJRLTBSFfWk/NPTPSR04/0lADfQ5URVBuk63cH/I6lwlRioh7naHHHwhFAWJxW30GbfdEfEL6KT7WO1EiCwRZ85bGXYJ2RdIMd9G7k/vpENKwGKvT6MvQeN9eQ2hxgBEhgIMxIU+JsmFu+nsNLOvl9P9Beg79CtbVsYAyDA9cSNzSQ='))
-#exit
-
 puts "Loading config"
-config = YAML.load(File.open('sails.conf'))
+begin
+	config = YAML.load(File.open('sails.conf'))
+rescue
+	raise Sails::ProviderError, 'Could not read the sails.conf file. Make sure it exists and is proper YAML.'
+end
 provider = Provider.new config['domain-name'], config['service-name']
 
-provider.connect_sock config['xmpp-connect-host'], config['xmpp-connect-port'].to_i
-
-provider.load_certs config['certificate-chain']
-provider.load_key config['private-key-path']
-
-#################
-# Load fixtures
-def address(address, provider)
-	address += provider.domain if address[-1,1] == '@'
-	address
+begin
+	provider.connect_sock config['xmpp-connect-host'], config['xmpp-connect-port'].to_i
+rescue
+	raise Sails::ProviderError, 'Could not connect to the XMPP server.'
 end
 
-config['fixture-waves'].each_pair do |id, data|
-next
-	wave = Wave.new(provider, id)
-	
-	data['deltas'].each do |delta_data|
-		delta = Delta.new(wave, address(delta_data['author'], provider))
-		
-		delta << Operations::AddUser.new(address(delta_data['add'], provider)) if delta_data['add']
-		delta << Operations::RemoveUser.new(address(delta_data['remove'], provider)) if delta_data['remove']
-		if delta_data['mutate']
-			delta << Operations::Mutate.new('b+main', 
-				wave.blip('b+main').create_fedone_line(address(delta_data['author'], provider), delta_data['mutate']))
-		end
-		
-		wave << delta
-	end
-	
-	provider << wave
+begin
+	provider.load_certs config['certificate-chain']
+	provider.load_key config['private-key-path']
+rescue
+	raise Sails::ProviderError, 'Could not read the certificate chain and/or private key. Make sure they are in the proper format.'
 end
-
-#playback = Playback.new(provider['ASDFASDFASDF'])
-#pp playback.to_xml
-
-#until playback.at_newest?
-#	playback.apply :next
-#	puts playback.to_xml
-#end
-
-#exit
-#################
 
 if config['ping']
+	puts "Sending a ping to #{config['ping']} due to configoration."
 	provider << Server.new(provider, config['ping'], config['ping'])
 end
 
 provider.send_data '<stream:stream xmlns="jabber:component:accept" xmlns:stream="http://etherx.jabber.org/streams" to="' + provider.name + '">'
 
-message = provider.sock.recv 1024
-puts "Recieved: \e[33m#{message}\e[0m"
-doc = Hpricot(message)
-
+doc = provider.read_plain
 id = (doc/'stream:stream').first['id']
 
 unless id
@@ -83,45 +51,27 @@ end
 key = Digest::SHA1.hexdigest(id + config['xmpp-password'])
 provider.send_data "<handshake>#{key}</handshake>"
 
-puts 'Setting up keepalive thread'
-Thread.new do
-	provider.send_data(' ') while sleep 60
+remote = SailsRemote.serve(provider)
+puts "DRb server running at #{remote.uri}"
+
+trap("INT") do
+	remote.stop_service
+	puts 'OBAI'
+	exit
 end
 
-remote = SailsRemote.serve(provider)
-trap("INT") { remote.stop_service; puts 'OBAI'; exit }
-puts "DRb server running at #{remote.uri}"
+Thread.new do
+	provider.send_data ' ' while sleep 60
+end
 
 puts 'Entering program loop'
 
 ids = {} # used for history requests
-incomplete = ''
 until provider.sock.closed?
-	message = incomplete + provider.sock.recv(10000)
+	packets = provider.read
 	
-	if !message || message.empty?
-		puts "Recieved: \e[33m#{message}\e[0m"
-		raise ProviderError, 'XMPP component connection closed unexpectantly.'
-	
-	elsif message.include? '</stream:stream>'
-		puts "Recieved: \e[33m#{message}\e[0m"
-		remote.stop_service
-		raise ProviderError, 'Server closed the XMPP component connection.'
-	end
-	
-	doc = Hpricot("<packet>#{message}<done/></packet>")
-	
-	if (doc/'packet/done').empty? # Didn't get the whole packet
-		incomplete = message
-		next
-	end
-	incomplete = ''
-	
-	puts "Recieved: \e[33m#{message}\e[0m"
-	
-	doc.root.children.each do |packet|
+	packets.each do |packet|
 		name = packet.name
-		next if name == 'done'
 		
 		if name == 'handshake'
 			puts "Connected to XMPP."
@@ -134,11 +84,12 @@ until provider.sock.closed?
 		from = packet['from']
 		to = packet['to']
 		
-		server = provider.servers.find_or_create from
+		server = provider.find_or_create_server from
 		
 		case [name.to_sym, type.to_sym]
 		
 			when [:iq, :get]
+			
 				if (packet/'query').any?
 					if (packet/'query').first['xmlns'].include?('items')
 						provider.send_xml 'iq', id, from, "<query xmlns=\"http://jabber.org/protocol/disco#items\"><item jid=\"#{provider.name}\" name=\"#{config['identity']}\"/></query>"
@@ -150,16 +101,13 @@ until provider.sock.closed?
 					puts "#{from} requested some deltas"
 					
 					node = (packet/'pubsub/items/delta-history').first
-					node['wavelet-name'] =~ /^(.+)\/w\+(.+)\/(.+)$/
-					wave_domain, wave_name, wavelet_name = $1, $2, $3
-					wave_domain.sub!('wave://', '')
+					wave = provider.find_or_create_wave node['wavelet-name']
 					
-					wave = provider["#{wave_domain}/w+#{wave_name}"]
 					payload = ''
 					(node['start-version'].to_i..node['end-version'].to_i).each do |version|
 						delta = wave[version]
 						next unless delta.is_a? Delta
-						payload << "<item><applied-delta xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><![CDATA[#{encode64(delta.to_applied)}]]></applied-delta></item>"
+						payload << "<item><applied-delta xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><![CDATA[#{encode64 delta.to_applied}]]></applied-delta></item>"
 					end
 					
 					payload << "<item><commit-notice xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" version=\"#{wave[node['end-version'].to_i].version}\"/></item>"
@@ -171,8 +119,8 @@ until provider.sock.closed?
 					puts "#{from} requested a certificate"
 					
 					node = (packet/'pubsub/items/signer-request').first
-					hash = decode64(node['signer-id'])
-					server = provider.servers.values.select{|item| item.certificate_hash == hash}.first
+					hash = decode64 node['signer-id']
+					server = provider.servers.by_signer_id  hash
 
 					if server
 						puts "Sending a cert to #{from} on request, for #{server.domain}"
@@ -181,7 +129,7 @@ until provider.sock.closed?
 							"<certificate><![CDATA[#{cert}]]></certificate>"
 						end.join ''
 							
-						provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{server.certificates.first.subject['CN']}\" algorithm=\"SHA256\"><#{payload}</signature></items></pubsub>"
+						provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{server.certificates.first.subject['CN']}\" algorithm=\"SHA256\">#{payload}</signature></items></pubsub>"
 					else
 						puts 'Couldn\'t find the signer ID.' # TODO: Send error packet
 					end
@@ -259,7 +207,7 @@ until provider.sock.closed?
 					node = (packet/'signature').first
 					puts "Got a cert from #{from} for #{node['domain']}"
 					
-					server = provider.servers.find_or_create node['domain']
+					server = provider.find_or_create_server node['domain']
 					
 					server.domain = node['domain']
 					server.certificates = (node/'certificate').map do |cert|

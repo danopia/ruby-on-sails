@@ -85,16 +85,7 @@ class Delta < BaseDelta
 			data = Sails::ProtoBuffer.parse(:signed_delta, data) if data.is_a? String
 		end
 		
-		wavelet.sub! 'wave://', ''
-		wavelet =~ /^(.+)\/w\+(.+)\/(.+)$/
-		wave_domain, wave_name, wavelet_name = $1, $2, $3
-		puts "Parsing #{wave_domain}'s #{wavelet_name} wavelet for w+#{wave_name}"
-		
-		wave = provider[wave_name]
-		unless wave
-			wave = Wave.new provider, wave_name, wave_domain
-			provider << wave
-		end
+		wave = provider.find_or_create_wave wavelet
 		
 		delta = Delta.new(wave, data[:delta][:author])
 		delta.version = data[:delta][:applied_to][:version]
@@ -103,11 +94,7 @@ class Delta < BaseDelta
 		delta.signature = data[:signature][:signature]
 		
 		delta.server = provider.servers.by_signer_id data[:signature][:signer_id]
-		puts 'aaaaaaaaaaa', delta.server.nil?
-		unless delta.server
-			delta.signer_id = data[:signature][:signer_id]
-			wave.request_cert [data[:delta][:applied_to][:hash], data[:delta][:applied_to][:version]], delta.signer_id
-		end
+		delta.signer_id = data[:signature][:signer_id]
 		
 		applied_to = delta.wave[delta.version]
 		unless applied_to
@@ -115,6 +102,10 @@ class Delta < BaseDelta
 			applied_to.version = data[:delta][:applied_to][:version]
 			applied_to.hash = data[:delta][:applied_to][:hash]
 			wave << applied_to
+		end
+		
+		unless delta.server
+			wave.request_cert applied_to, delta.signer_id
 		end
 		
 		data[:delta][:operations].each do |operation|
@@ -269,13 +260,7 @@ class Delta < BaseDelta
 			puts "Sending to #{targets.join(', ')}"
 			
 			targets.uniq.each do |target|
-				server = @wave.provider.servers[target.downcase]
-				
-				unless server
-					server = Server.new @wave.provider, target.downcase
-					@wave.provider << server
-				end
-				
+				server = @wave.provider.find_or_create_server target
 				puts "Handing off a packet for #{server.name}"
 				server << ['message', 'normal', packet]
 			end

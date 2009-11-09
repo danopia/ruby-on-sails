@@ -9,8 +9,16 @@ class WavesController < ApplicationController
 		if params[:id] == 'new'
 			@wave = Sails::Wave.new(@remote.provider)
 			@remote << @wave
+			
+			delta = Sails::Delta.new @wave, @address
+			delta << Sails::Operations::Mutate.new(delta, 'conversation', [
+				{:element_start=>{:type=>"conversation"}},
+				{:element_end => true}
+			])
+			
+    	@remote.add_delta(@wave, delta)
+			
     	redirect_to wave_path(@wave.name)
-    	#render :text => params.inspect
 			return
 		end
 		
@@ -42,15 +50,17 @@ class WavesController < ApplicationController
 		@wave = @remote[params[:id]]
 		
 		if @wave.participants.include? @address
+			blip = 'b+' + @remote.random_string(6)
+			
 			delta = Sails::Delta.new @wave, @address
 			delta << Sails::Operations::Mutate.new(delta, 'conversation', [
-				{:element_start=>{:type=>"conversation"}},
-				{:element_start=>{:type=>"blip", :attributes => [{:value=>'b+main', :key=>"id"}]}},
+				{:retain_item_count => 1 + @wave.blips.size*2},
+				{:element_start=>{:type=>"blip", :attributes => [{:value=>blip, :key=>"id"}]}},
 				{:element_end => true},
-				{:element_end => true}
+				{:retain_item_count => 1}
 			])
-			delta << Sails::Operations::Mutate.new(delta, 'b+main', [])
-			delta << Sails::Operations::Mutate.new(delta, 'b+main', [
+			delta << Sails::Operations::Mutate.new(delta, blip, [])
+			delta << Sails::Operations::Mutate.new(delta, blip, [
 				{:element_start=>{:type=>"body"}},
 				{:element_start=>{:type=>"line"}},
 				{:element_end => true},
@@ -60,7 +70,7 @@ class WavesController < ApplicationController
 			
 			#delta << Sails::Operations::Mutate.new(delta, params[:doc], @wave.blip(params[:doc]).create_fedone_line(@address, params[:message]))
     	@remote.add_delta(@wave, delta)
-    	flash[:notice] = "Your message has been added."
+    	#flash[:notice] = "Your message has been added."
     else
     	flash[:error] = 'You aren\'t in that wave.'
     end

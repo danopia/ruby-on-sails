@@ -69,7 +69,12 @@ class Playback
 				if op.document_id == 'conversation'
 					self.apply_conv_mutate(op.components)
 				else
-					self.blip(op.document_id).apply_mutate(delta.author, op.components) 
+					if op.components.any?
+						self.blip(op.document_id).apply_mutate(delta.author, op.components) 
+					else
+						puts "New blip #{op.document_id}"
+						@blips << Blip.new(op.document_id)
+					end
 				end
 			end
 		end
@@ -116,11 +121,15 @@ class Playback
 	def read_conv
 		stack = [[]]
 		
+		pp @conv
 		@conv.each do |item|
+			p item
+			p stack
 			if item.is_a? Element
-				stack.last << self.blip(item.attributes['id'])
+				next if item.type == 'conversation'
+				stack.last << item.attributes['id']
 				stack.push []
-			elsif item == :end
+			elsif item == :end && stack.size >= 2
 				arr = stack.pop
 				stack.last << arr if arr.any?
 			end

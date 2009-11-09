@@ -48,5 +48,11 @@ module Sails
 	def sha2 data
 		Digest::SHA2.digest data
 	end
+	
+	# Generate a random alphanumeric string
+	def random_string(length=12)
+		@letters ||= ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
+		([''] * length).map { @letters[rand * @letters.size] }.join('')
+	end
 
 end

@@ -25,6 +25,17 @@ class Blip < Array
 		arr
 	end
 	
+	def create_mutation new
+		ops = []
+		same_count = 0
+		
+		old = self.to_arr
+		old_index = 0
+		new_index = 0
+		
+		
+	end
+	
 	# Size of the blip's contents, strings are the number of bytes and everything
 	# else counts as 1 byte
 	def item_count

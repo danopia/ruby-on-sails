@@ -3,10 +3,6 @@ module Sails
 
 # Variation of Hash with a degree of case-insensitive keys.
 class ServerList < Hash
-	def initialize provider
-		@provider = provider
-	end
-	
 	def [](server)
 		return nil unless server
 		super server.downcase
@@ -24,15 +20,6 @@ class ServerList < Hash
 	def << server
 		self[server.domain] = server
 		self[server.name] = server
-	end
-	
-	def find_or_create name
-		server = self[name]
-		unless server
-			server = Server.new @provider, name
-			@provider << server
-		end
-		server
 	end
 	
 	def by_signer_id hash
@@ -76,7 +63,7 @@ class Provider
 	
 	# Load the provider's private key from a file.
 	def load_key(path)
-		@key = OpenSSL::PKey::RSA.new(File.open(path).read)
+		@key = OpenSSL::PKey::RSA.new(open(path).read)
 	end
 	
 	# Signs a chunk of data using the private key.
@@ -183,6 +170,55 @@ class Provider
 			else
 				server.flush
 			end
+		end
+	end
+	
+	def read_plain
+		message = @sock.recv 1024
+		puts "Recieved: \e[33m#{message}\e[0m"
+		Hpricot(message)
+	end
+	
+	def read
+		message = ''
+		until @sock.closed?
+			message += @sock.recv 1024
+			
+			if !message || message.empty?
+				raise ProviderError, 'XMPP component connection closed unexpectantly. (got blank packet)'
+			elsif message.include? '</stream:stream>'
+				raise ProviderError, 'Server closed the XMPP component connection.'
+			end
+			
+			doc = Hpricot("<packet>#{message}<done/></packet>")
+			
+			next if (doc/'packet/done').empty? # Didn't get the whole packet
+			
+			puts "Recieved: \e[33m#{message}\e[0m"
+			
+			return doc.root.children.select {|node| node.name != 'done'}
+		end
+		nil
+	end
+	
+	def find_or_create_wave path
+		path =~ /^(.+)\/w\+(.+)\/(.+)$/
+		domain, name, wavelet = $1, $2, $3
+		domain.sub!('wave://', '')
+		
+		server = find_or_create_server domain
+		return server[name] if server[name]
+		
+		wave = Wave.new self, name, server
+		self << wave
+		wave
+	end
+	
+	def find_or_create_server name
+		if @servers.keys.include? name.downcase
+			@servers[name]
+		else
+			Server.new self, name
 		end
 	end
 end # class
