@@ -35,7 +35,7 @@ class SailsAdapter
 				version = @wave.newest_version
 				
 				body = @wave.blips.flatten.map do |blip|
-					"<p><strong>#{blip.name}</strong></p>\n#{escape blip.to_xml}\n<hr/>"
+					"<p><strong>#{blip}</strong></p>\n#{escape blip.to_xml}\n<hr/>"
 				end.join("\n")
 				
 				env['async.callback'].call [200, {

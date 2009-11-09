@@ -3,12 +3,14 @@ module Sails
 
 # Represents a certain version of a Blip at a certain point in time. Playback
 # creates instances of this class for you. Mainly is a list of contents.
-class Blip < Array
-	attr_accessor :name, :authors, :last_changed
+class Blip
+	attr_accessor :name, :authors, :last_changed, :contents, :special
 	
 	def initialize name
 		@name = name
 		@authors = []
+		@contents = ''
+		@special = []
 	end
 	
 	# Hackity hack
@@ -21,7 +23,7 @@ class Blip < Array
 			{:element_end=>true},
 			{:characters=>text}]
 			
-		arr.insert(0, {:retain_item_count=>item_count}) if item_count > 0
+		arr.insert(0, {:retain_item_count=>item_count}) if @contents.size > 0
 		arr
 	end
 	
@@ -36,43 +38,34 @@ class Blip < Array
 		
 	end
 	
-	# Size of the blip's contents, strings are the number of bytes and everything
-	# else counts as 1 byte
-	def item_count
-		inject(0) do |total, item|
-			if item.is_a? String
-				next total + item.size
-			else
-				next total + 1
-			end
-		end
-	end
-	
 	# Dumps the current version of this Blip instance to XML. Note that said
 	# XML probably won't be value XML in practice.
 	def to_xml
 		element_stack = []
-		map do |item|
-			if item.is_a? String
-				item
-				
-			elsif item == :end
+		special_index = 0
+		
+		@contents.gsub "\x001" do
+			item = @special[special_index]
+			special_index += 1
+			
+			if item == :end
 				"</#{element_stack.pop}>"
 				
 			elsif item.is_a? Element
 				element_stack << item.type
 				
 				attribs = ''
-				item.attributes.each_pair do |key, value|
+				item.each_pair do |key, value|
 					attribs << " #{key}=\"#{value}\""
 				end
 				
 				"<#{item.type}#{attribs}>"
 				
 			else
-				raise SailsError, "unknown document content type: #{item.class}"
+				raise Sails::Error, "unknown document content type: #{item.class}"
 			end
-		end.join("\n")
+			
+		end
 	end
 	
 	# Apply a mutation. Does NO version checking!
@@ -81,62 +74,59 @@ class Blip < Array
 	def apply_mutate(author, operations)
 		@authors << author unless @authors.include? author
 	
-		item = 0 # in the 'contents' array
-		index = 0 # in a string
+		index = 0 # in the 'contents' array
+		special_index = 0 # in the 'special' array
 		operations.compact.each do |component|
+			value = component.values.first
+			
 			if component[:retain_item_count]
-				advance = component[:retain_item_count]
-				until advance == 0
-					if !self[item].is_a?(String)
-						advance -= 1
-						item += 1
-						index = 0
-					elsif (self[item].size - index) <= advance
-						advance -= (self[item].size - index)
-						item += 1
-						index = 0
-					else # advance within current string
-						index += advance
-						advance = 0
-					end
-				end
-				puts "Advanced #{component[:retain_item_count]} items"
+				string = @contents[index, value]
+				special_index += string.count("\x001")
+				index += value
 			
 			elsif component[:element_start]
-				element = Element.new(component[:element_start][:type])
-				(component[:element_start][:attributes] || []).each do |attribute|
-					element.attributes[attribute[:key]] = attribute[:value]
+				element = Element.new value[:type]
+				(value[:attributes] || []).each do |attribute|
+					element[attribute[:key]] = attribute[:value]
 				end
 				
-				self.insert(item, element)
-				item += 1
-				index = 0
+				@contents.insert index, "\x001"
+				@special.insert special_index, element
+				index += 1
+				special_index += 1
 			
 			elsif component[:element_end]
-				self.insert(item, :end)
-				item += 1
-				index = 0
+				@contents.insert index, "\x001"
+				@special.insert special_index, :end
+				index += 1
+				special_index += 1
 			
 			elsif component[:characters]
-				self.insert(item, component[:characters])
-				item += 1
-				index = 0
+				@contents.insert index, value
+				index += 1
 			
 			elsif component[:delete_chars]
-				self.delete_at(item)
-				index = 0
+				if @contents[index, value.size] != value
+					raise Sails::Error, "chars to delete didn't match existing chars"
+				end
+				
+				@contents.slice! index, value.size
 			end
+		end
+		
+		if index != @contents.size
+			raise Sails::Error, "didn't end up at the end of the contents array. #{@contents.size - index} bytes too short."
 		end
 	end
 
 end # class
 
 # Represents an element starting tag.
-class Element
-	attr_accessor :type, :attributes
+class Element < Hash
+	attr_accessor :type
 	def initialize(type=nil)
 		@type = type
-		@attributes = {}
+		super()
 	end
 end
 
