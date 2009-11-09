@@ -19,10 +19,6 @@ class WavesController < ApplicationController
 			delta = Sails::Delta.new @wave, @address
 			delta << Sails::Operations::AddUser.new(@address)
     	@remote.add_delta @wave, delta
-    	
-			#delta = Sails::Delta.new @wave, @address
-			#delta << Sails::Operations::Mutate.new('b+main', @wave.blip('b+main').create_fedone_line(@address, "Hey there, I'm #{@address} "))
-    	#@remote.add_delta @wave, delta
     end
     
   end

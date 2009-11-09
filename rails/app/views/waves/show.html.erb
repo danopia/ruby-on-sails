@@ -20,9 +20,10 @@
 <blockquote id="contents2">
 <% @wave.blips.flatten.each do |blip| -%>
 	<p><strong><%=h blip %></strong></p>
+	<p><em>by <%=h @wave.blip(blip).authors.join(', ') %></em></p>
 <%= @wave.blip(blip).to_xml %>
 	<hr/>
-<% end -%>:
+<% end -%>
 </blockquote>
 <%= link_to_remote "Update", :update => "contents2", :url => "/waves/#{@wave.name}/ajax" %>
 

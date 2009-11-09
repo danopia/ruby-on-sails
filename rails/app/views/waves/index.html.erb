@@ -12,9 +12,7 @@
 
 <p><em>Participants:</em> <%=h wave.participants.join(', ') %></p>
 <% wave.blips.flatten.each do |blip| %>
-<p><em><%=h blip.name %>:</em> <%=h blip.select{|item| item.is_a? String}.join(' ') %></p>
+<p><em><%=h blip %>:</em> <%=h wave.blip(blip).contents.gsub("\001", ' ') %></p>
 <% end %>
-
-<p>Have <%=h wave.deltas.size %> deltas</p>
 
 <% end -%>
