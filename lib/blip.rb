@@ -44,7 +44,7 @@ class Blip
 		element_stack = []
 		special_index = 0
 		
-		@contents.gsub "\x001" do
+		@contents.gsub "\001" do
 			item = @special[special_index]
 			special_index += 1
 			
@@ -81,7 +81,7 @@ class Blip
 			
 			if component[:retain_item_count]
 				string = @contents[index, value]
-				special_index += string.count("\x001")
+				special_index += string.count("\001")
 				index += value
 			
 			elsif component[:element_start]
@@ -90,20 +90,20 @@ class Blip
 					element[attribute[:key]] = attribute[:value]
 				end
 				
-				@contents.insert index, "\x001"
+				@contents.insert index, "\001"
 				@special.insert special_index, element
 				index += 1
 				special_index += 1
 			
 			elsif component[:element_end]
-				@contents.insert index, "\x001"
+				@contents.insert index, "\001"
 				@special.insert special_index, :end
 				index += 1
 				special_index += 1
 			
 			elsif component[:characters]
 				@contents.insert index, value
-				index += 1
+				index += value.size
 			
 			elsif component[:delete_chars]
 				if @contents[index, value.size] != value

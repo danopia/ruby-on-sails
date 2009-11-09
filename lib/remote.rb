@@ -66,13 +66,55 @@ class SailsRemote
 			wave = wave.name
 		end
 		self[wave] << delta
-		#delta.propagate
+		delta.propagate true
 	end
 	
 	# Generate a random alphanumeric string
 	def random_string(length=12)
 		@letters ||= ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
 		([''] * length).map { @letters[rand * @letters.size] }.join('')
+	end
+	
+	def create_local_wave(author)
+		wave = Sails::Wave.new(@provider)
+		
+		delta = Sails::Delta.new wave, author
+		delta << Sails::Operations::Mutate.new('conversation', [
+			{:element_start => {:type => 'conversation'}},
+			{:element_end => true}
+		])
+		
+		self << wave
+		add_delta wave, delta
+		wave
+	end
+	
+	
+	def create_append_blip_delta author, blip, wave
+		Sails::Operations::Mutate.new('conversation', [
+			{:retain_item_count => wave.conv.size - 1},
+			{:element_start=>{:type=>"blip", :attributes => [{:value=>blip, :key=>"id"}]}},
+			{:element_end => true},
+			{:retain_item_count => 1}
+		])
+	end
+	
+	def create_new_blip_delta blip
+		Sails::Operations::Mutate.new(blip, [])
+	end
+	
+	def create_append_line_delta author, blip, message, first=false
+		if first
+			Sails::Operations::Mutate.new(blip, [
+				{:element_start=>{:type=>"body"}},
+				{:element_start=>{:type=>"line"}},
+				{:element_end => true},
+				{:characters => message},
+				{:element_end => true}
+			])
+		else
+			raise Sails::Error, 'not coded yet'
+		end
 	end
 end
 

@@ -7,16 +7,7 @@ class WavesController < ApplicationController
 
   def show
 		if params[:id] == 'new'
-			@wave = Sails::Wave.new(@remote.provider)
-			@remote << @wave
-			
-			delta = Sails::Delta.new @wave, @address
-			delta << Sails::Operations::Mutate.new(delta, 'conversation', [
-				{:element_start=>{:type=>"conversation"}},
-				{:element_end => true}
-			])
-			
-    	@remote.add_delta(@wave, delta)
+			@wave = @remote.create_local_wave @address
 			
     	redirect_to wave_path(@wave.name)
 			return
@@ -26,11 +17,11 @@ class WavesController < ApplicationController
 		
 		unless @wave.participants.include? @address
 			delta = Sails::Delta.new @wave, @address
-			delta << Sails::Operations::AddUser.new(delta, @address)
+			delta << Sails::Operations::AddUser.new(@address)
     	@remote.add_delta @wave, delta
     	
 			#delta = Sails::Delta.new @wave, @address
-			#delta << Sails::Operations::Mutate.new(delta, 'b+main', @wave.blip('b+main').create_fedone_line(@address, "Hey there, I'm #{@address} "))
+			#delta << Sails::Operations::Mutate.new('b+main', @wave.blip('b+main').create_fedone_line(@address, "Hey there, I'm #{@address} "))
     	#@remote.add_delta @wave, delta
     end
     
@@ -53,22 +44,10 @@ class WavesController < ApplicationController
 			blip = 'b+' + @remote.random_string(6)
 			
 			delta = Sails::Delta.new @wave, @address
-			delta << Sails::Operations::Mutate.new(delta, 'conversation', [
-				{:retain_item_count => 1 + @wave.blips.size*2},
-				{:element_start=>{:type=>"blip", :attributes => [{:value=>blip, :key=>"id"}]}},
-				{:element_end => true},
-				{:retain_item_count => 1}
-			])
-			delta << Sails::Operations::Mutate.new(delta, blip, [])
-			delta << Sails::Operations::Mutate.new(delta, blip, [
-				{:element_start=>{:type=>"body"}},
-				{:element_start=>{:type=>"line"}},
-				{:element_end => true},
-				{:characters => params[:message]},
-				{:element_end => true}
-			])
+			delta << @remote.create_append_blip_delta(@author, blip, @wave)
+			delta << @remote.create_new_blip_delta(blip)
+			delta << @remote.create_append_line_delta(@author, blip, params[:message], true)
 			
-			#delta << Sails::Operations::Mutate.new(delta, params[:doc], @wave.blip(params[:doc]).create_fedone_line(@address, params[:message]))
     	@remote.add_delta(@wave, delta)
     	#flash[:notice] = "Your message has been added."
     else
@@ -88,7 +67,7 @@ class WavesController < ApplicationController
     	flash[:error] = "#{params[:who]} isn't in this wave."
     else
 			delta = Sails::Delta.new @wave, @address
-			delta << Sails::Operations::RemoveUser.new(delta, params[:who])
+			delta << Sails::Operations::RemoveUser.new(params[:who])
     	@remote.add_delta(@wave, delta)
     	flash[:notice] = "#{params[:who]} has been removed from the wave."
     end
@@ -105,7 +84,7 @@ class WavesController < ApplicationController
     	flash[:error] = "#{params[:who]} is already in this wave."
     else
 			delta = Sails::Delta.new @wave, @address
-			delta << Sails::Operations::AddUser.new(delta, params[:who])
+			delta << Sails::Operations::AddUser.new(params[:who])
     	@remote.add_delta(@wave, delta)
     	flash[:notice] = "#{params[:who]} has been added to the wave."
     end

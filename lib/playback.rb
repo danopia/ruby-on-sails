@@ -16,6 +16,7 @@ class Playback
 		@version = 0
 		@participants = []
 		@blips = []
+		@blips2 = []
 		@conv = []
 		
 		self.apply version if version != 0
@@ -73,7 +74,7 @@ class Playback
 						self.blip(op.document_id).apply_mutate(delta.author, op.components) 
 					else
 						puts "New blip #{op.document_id}"
-						@blips << Blip.new(op.document_id)
+						@blips2 << Blip.new(op.document_id)
 					end
 				end
 			end
@@ -84,7 +85,7 @@ class Playback
 	
 	# Look up a blip or create it
 	def [] blip_id
-		blips = @blips.flatten.select {|blip| blip.name == blip_id}
+		blips = @blips2.flatten.select {|blip| blip.name == blip_id}
 		return blips.first if blips.any?
 		
 		Blip.new blip_id
@@ -103,7 +104,7 @@ class Playback
 			elsif component[:element_start]
 				element = Element.new(component[:element_start][:type])
 				(component[:element_start][:attributes] || []).each do |attribute|
-					element.attributes[attribute[:key]] = attribute[:value]
+					element[attribute[:key]] = attribute[:value]
 				end
 				
 				@conv.insert(item, element)
@@ -127,7 +128,7 @@ class Playback
 			p stack
 			if item.is_a? Element
 				next if item.type == 'conversation'
-				stack.last << item.attributes['id']
+				stack.last << item['id']
 				stack.push []
 			elsif item == :end && stack.size >= 2
 				arr = stack.pop

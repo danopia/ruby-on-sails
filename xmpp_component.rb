@@ -149,7 +149,9 @@ until provider.sock.closed?
 					remote.all_waves.each do |wave|
 						wave.deltas.each_value do |delta|
 							next unless delta.is_a? Delta
-							delta.server = server if delta.signer_id == server.certificate_hash
+							next unless delta.signer_id == server.certificate_hash
+							next if delta.server == server
+							delta.server = server
 							puts "Changed server for #{wave.conv_root_path} ##{delta.version}."
 						end
 					end
@@ -178,7 +180,11 @@ until provider.sock.closed?
 					haswave = false
 					(packet/'query/item').each do |item|
 						puts "\t#{item['name']}\t(at #{item['jid']})"
-						haswave = item['jid'] if item['name'].include? 'Wave Server'
+						if item['name']
+							haswave = item['jid'] if item['name'].include? 'Wave Server'
+						else
+							haswave = item['jid'] if item['jid'] =~ /^wave\./
+						end
 					end
 					
 					if haswave
@@ -194,13 +200,13 @@ until provider.sock.closed?
 				elsif (packet/'query/identity').any?
 					node = (packet/'query/identity').first
 					
-					if node['type'] == 'google-wave'
+					if (packet/'feature[@var=http://waveprotocol.org/protocol/0.2/waveserver]').any?
 						server.state = :details
-						
 						puts "#{from} is Google Wave service (#{node['name']}), sending ping (state = :details)"
 						provider.send_xml 'message', 'normal', from, '<ping xmlns="http://waveprotocol.org/protocol/0.2/waveserver"/><request xmlns="urn:xmpp:receipts"/>'
 					else
-						puts "#{from} is NOT a Google Wave service, it's a \"#{node['name']}\"!"
+						puts "#{from} does not have the Google Wave feature (state = :error)"
+						server.state = :error
 					end
 				
 				elsif (packet/'signature/certificate').any?

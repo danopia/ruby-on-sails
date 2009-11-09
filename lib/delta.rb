@@ -113,11 +113,11 @@ class Delta < BaseDelta
 			details = operation.values.first
 			case type
 				when :added
-					delta << Operations::AddUser.new(delta, details)
+					delta << Operations::AddUser.new(details)
 				when :removed
-					delta << Operations::RemoveUser.new(delta, details)
+					delta << Operations::RemoveUser.new(details)
 				when :mutate
-					delta << Operations::Mutate.parse(delta, details)
+					delta << Operations::Mutate.parse(details)
 			end
 		end
 		
@@ -227,11 +227,9 @@ class Delta < BaseDelta
 	# TODO: Handle each server better. (Queue, ping, etc.)
 	def propagate(applied=false)
 		freeze
-		puts 'hi'
 		wave.apply self
 
 		if @wave.local?
-		puts 'hi2'
 			people = wave.participants
 			
 			# Tell people who were removed (is this right?)
@@ -251,9 +249,7 @@ class Delta < BaseDelta
 			# Don't send back to ourselfs
 			targets.delete @wave.provider.domain
 			
-		puts 'hia'
 			return if targets.empty?
-		puts 'hi3'
 			
 			packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(self.to_applied)}]]></applied-delta></wavelet-update></item></items></event>"
 			
@@ -266,7 +262,6 @@ class Delta < BaseDelta
 			end
 	
 		else # Then it's remote; send out the request
-		puts 'hie'
 			@wave.post self
 		end
 	end

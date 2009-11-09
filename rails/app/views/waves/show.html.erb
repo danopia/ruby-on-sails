@@ -19,8 +19,8 @@
 <p><strong><a name="contents">Contents</a></strong></p>
 <blockquote id="contents2">
 <% @wave.blips.flatten.each do |blip| -%>
-	<p><strong><%=h blip.name %></strong></p>
-<%= blip.to_xml %>
+	<p><strong><%=h blip %></strong></p>
+<%= @wave.blip(blip).to_xml %>
 	<hr/>
 <% end -%>:
 </blockquote>

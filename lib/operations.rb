@@ -2,26 +2,15 @@
 module Sails::Operations
 
 class Operation
-	attr_accessor :delta
-	
-	def initialize delta=nil
-		@delta = delta
-	end
-	
-	def author
-		@delta.author
-	end
 end
 
 class UserOperation < Operation
 	attr_accessor :who
 	
 	# Create a new user add/remove operation with the specified users..
-	def initialize(delta=nil, who=[])
+	def initialize(who=[])
 		who = [who] unless who.is_a? Array
 		@who = who
-		
-		super delta
 	end
 end
 
@@ -77,19 +66,15 @@ end
 class Mutate < Operation
 	attr_accessor :document_id, :components
 	
-	def initialize(delta=nil, document_id=nil, components=[])
+	def initialize(document_id=nil, components=[])
 		components = [components] unless components.is_a? Array
 		
 		@document_id = document_id
 		@components = components
-		
-		super delta
 	end
 	
-	def self.parse(delta, data)
-		doc = data[:document_id]
-		components = data[:mutation][:components]
-		Mutate.new(delta, doc, components)
+	def self.parse data
+		Mutate.new data[:document_id], data[:mutation][:components]
 	end
 	
 	def to_hash
