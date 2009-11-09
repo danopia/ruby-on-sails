@@ -29,9 +29,8 @@
 
 
 <%= form_remote_tag :url => wave_update_path(@wave.name), :complete => "submitted();", :html => {'id' => 'add-form'} %>
-	Document ID: <%= text_field_tag 'doc' %><br/>
 	Message: <%= text_field_tag "message" %><br/>
-	<%= submit_tag "Add FedOne line" %>
+	<%= submit_tag "Add new blip" %>
 </form>
 
 <script type="text/javascript" src="/javascripts/prototype.js"></script>

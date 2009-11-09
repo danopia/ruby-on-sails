@@ -53,9 +53,17 @@ class SailsRemote
 	def [](name)
 		@provider[name]
 	end
-	# Add a wave
-	def <<(wave)
-		@provider << wave
+	
+	# Add a delta or wave
+	def <<(item)
+		if item.is_a? Wave
+			@provider << item
+		elsif item.is_a? Delta
+			wave = self[item.wave.name]
+			add_delta wave, item
+		else
+			raise Sails::Error, "unexpected object passed"
+		end
 	end
 	
 	# Add a delta to a wave (faster to give the wave's name). Also propagates the
@@ -75,46 +83,9 @@ class SailsRemote
 		([''] * length).map { @letters[rand * @letters.size] }.join('')
 	end
 	
-	def create_local_wave(author)
-		wave = Sails::Wave.new(@provider)
-		
-		delta = Sails::Delta.new wave, author
-		delta << Sails::Operations::Mutate.new('conversation', [
-			{:element_start => {:type => 'conversation'}},
-			{:element_end => true}
-		])
-		
+	def new_local_wave
+		wave = Sails::Wave.new @provider
 		self << wave
-		add_delta wave, delta
 		wave
 	end
-	
-	
-	def create_append_blip_delta author, blip, wave
-		Sails::Operations::Mutate.new('conversation', [
-			{:retain_item_count => wave.conv.size - 1},
-			{:element_start=>{:type=>"blip", :attributes => [{:value=>blip, :key=>"id"}]}},
-			{:element_end => true},
-			{:retain_item_count => 1}
-		])
-	end
-	
-	def create_new_blip_delta blip
-		Sails::Operations::Mutate.new(blip, [])
-	end
-	
-	def create_append_line_delta author, blip, message, first=false
-		if first
-			Sails::Operations::Mutate.new(blip, [
-				{:element_start=>{:type=>"body"}},
-				{:element_start=>{:type=>"line"}},
-				{:element_end => true},
-				{:characters => message},
-				{:element_end => true}
-			])
-		else
-			raise Sails::Error, 'not coded yet'
-		end
-	end
 end
-

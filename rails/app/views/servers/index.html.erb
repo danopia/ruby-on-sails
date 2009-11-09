@@ -16,7 +16,7 @@
 	<td><%=h server.name %></td>
 	<td><%= server.state %></td>
 	<td><%=h encode64(server.certificate_hash) rescue '--' %></td>
-	<td><%=h server.certificate.subject['CN'] rescue '--' %></td>
+	<td><%=h server.certificates.first.subject['CN'] rescue '--' %></td>
 </tr>
 <% end -%>
 

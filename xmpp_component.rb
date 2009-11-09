@@ -240,15 +240,19 @@ until provider.sock.closed?
 					
 				elsif (packet/'pubsub/items/item/applied-delta').any?
 					wave = ids[id]
-					ids.delete id
-					puts "Got history for #{wave.name}"
-					
-					(packet/'pubsub/items/item/applied-delta').each do |update|
-						delta = Delta.parse(provider, wave.conv_root_path, decode64(update.inner_text), true)
-						puts "Got a delta, version #{delta.version}"
+					if wave
+						ids.delete id
+						puts "Got history for #{wave.name}"
+						
+						(packet/'pubsub/items/item/applied-delta').each do |update|
+							delta = Delta.parse(provider, wave.conv_root_path, decode64(update.inner_text), true)
+							puts "Got a delta, version #{delta.version}"
+						end
+						
+						wave.apply :newest
+					else
+						puts "I didn't request this?"
 					end
-					
-					wave.apply :newest
 				end
 			
 			when [:message, :normal], [:message, :none]
@@ -263,7 +267,7 @@ until provider.sock.closed?
 								"<certificate><![CDATA[#{cert}]]></certificate>"
 							end.join ''
 							
-							provider.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.name}\" algorithm=\"SHA256\">#{payload}</signature></item></publish></pubsub>"
+							provider.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.domain}\" algorithm=\"SHA256\">#{payload}</signature></item></publish></pubsub>"
 						
 						else
 							puts "#{from} ACK'ed our previous packet."

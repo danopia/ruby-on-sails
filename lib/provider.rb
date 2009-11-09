@@ -192,6 +192,7 @@ class Provider
 			
 			doc = Hpricot("<packet>#{message}<done/></packet>")
 			
+			next if message[-1,1] != '>'
 			next if (doc/'packet/done').empty? # Didn't get the whole packet
 			
 			puts "Recieved: \e[33m#{message}\e[0m"
