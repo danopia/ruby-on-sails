@@ -249,20 +249,26 @@ class Delta < BaseDelta
 			# Don't send back to ourselfs
 			targets.delete @wave.provider.domain
 			
-			return if targets.empty?
+			unless targets.empty?
 			
-			packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(self.to_applied)}]]></applied-delta></wavelet-update></item></items></event>"
-			
-			puts "Sending to #{targets.join(', ')}"
-			
-			targets.uniq.each do |target|
-				server = @wave.provider.find_or_create_server target
-				puts "Handing off a packet for #{server.name}"
-				server << ['message', 'normal', packet]
+				packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(self.to_applied)}]]></applied-delta></wavelet-update></item></items></event>"
+				
+				puts "Sending to #{targets.join(', ')}"
+				
+				targets.uniq.each do |target|
+					server = @wave.provider.find_or_create_server target
+					puts "Handing off a packet for #{server.name}"
+					server << ['message', 'normal', packet]
+				end
 			end
 	
 		else # Then it's remote; send out the request
 			@wave.post self
+		end
+		
+		unless @author == 'echoey@danopia.net'
+			puts 'poking Echoey' if @wave.participants.include? 'echoey@danopia.net'
+			Echoey.new.handle $remote, @wave, @operations.select {|op| op.is_a? Operations::Mutate }.map {|op| @wave.blip(op.document_id) }.uniq.first if @wave.participants.include? 'echoey@danopia.net'
 		end
 	end
 	

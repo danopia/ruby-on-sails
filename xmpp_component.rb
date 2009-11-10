@@ -7,6 +7,8 @@ require 'yaml'
 require 'sails'
 include Sails
 
+require 'agents/echoey'
+
 puts "Loading config"
 begin
 	config = YAML.load(File.open('sails.conf'))
@@ -52,6 +54,7 @@ key = Digest::SHA1.hexdigest(id + config['xmpp-password'])
 provider.send_data "<handshake>#{key}</handshake>"
 
 remote = SailsRemote.serve(provider)
+$remote = remote
 puts "DRb server running at #{remote.uri}"
 
 trap("INT") do
