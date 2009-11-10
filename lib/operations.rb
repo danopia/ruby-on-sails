@@ -78,10 +78,12 @@ class Mutate < Operation
 	end
 	
 	def to_hash
-		{:mutate => {
-			:mutation => {
-				:components => @components},
+		hash = {:mutate => {
+			:mutation => {},
 			:document_id => @document_id}}
+			
+		hash[:mutate][:mutation][:components] = @components if @components.any?
+		hash
 	end
 	
 	def to_s

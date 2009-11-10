@@ -25,6 +25,16 @@ end
 
 module Sails
 
+	class Utils
+	
+		# Generate a random alphanumeric string
+		def self.random_string(length=12)
+			@letters ||= ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
+			([''] * length).map { @letters[rand * @letters.size] }.join('')
+		end
+	
+	end
+
 	# Used for general Sails-related errors.
 	class Error < RuntimeError; end
 	

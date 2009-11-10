@@ -49,13 +49,13 @@ class Wave < Playback
 	def <<(item)
 		if item.is_a? BaseDelta
 			@deltas[item.version] = item
-			item.propagate if item.is_a?(Delta)
+			item.commit! if item.is_a? Delta
 			
 		elsif item.is_a? Blip
 			if blip(item.name)
-				raise SailsError, 'This blip already exists.'
+				raise Sails::Error, 'This blip already exists.'
 			else
-				raise SailsError, 'Not implemented yet.'
+				raise Sails::Error, 'Not implemented yet.'
 			end
 		else
 			raise ArgumentError, 'expected a Blip, Delta, or FakeDelta'
@@ -116,6 +116,15 @@ class Wave < Playback
 		end
 		
 		true
+	end
+	
+	def build_delta author, &block
+		delta = Delta.new self, author
+		builder = DeltaBuilder.new delta
+		block.arity < 1 ? builder.instance_eval(&block) : block.call(builder)
+		
+		self << delta
+		delta
 	end
 end # class
 

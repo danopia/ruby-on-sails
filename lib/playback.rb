@@ -122,10 +122,7 @@ class Playback
 	def read_conv
 		stack = [[]]
 		
-		pp @conv
 		@conv.each do |item|
-			p item
-			p stack
 			if item.is_a? Element
 				next if item.type == 'conversation'
 				stack.last << item['id']
@@ -135,9 +132,6 @@ class Playback
 				stack.last << arr if arr.any?
 			end
 		end
-		
-		puts "New conversation structure:"
-		pp stack.first
 		
 		@blips = stack
 	end

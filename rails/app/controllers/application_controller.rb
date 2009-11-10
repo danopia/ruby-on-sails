@@ -65,7 +65,7 @@ class ApplicationController < ActionController::Base
 	# Connect the SailsRemote. Also sets @address to the current user's address.
 	def connect_remote
 		unless @remote
-			@remote = SailsRemote.connect
+			@remote = Sails::Remote.connect
 		end
 		
 		@address = "#{current_user.login}@#{@remote.provider.domain}"

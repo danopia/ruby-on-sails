@@ -9,7 +9,7 @@ class WavesController < ApplicationController
 		if params[:id] == 'new'
 			@wave = @remote.new_local_wave
 			
-			Sails::Delta.build @remote, @wave, @address do
+			Sails::DeltaBuilder.build @wave, @address do
 				add_self
 				create_conv
 			end
@@ -19,14 +19,36 @@ class WavesController < ApplicationController
 		end
 		
 		@wave = @remote[params[:id]]
+		unless @wave
+			render :text => 'No such wave.', :status => 404
+			return
+		end
 		
 		unless @wave.participants.include? @address
-			Sails::Delta.build @remote, @wave, @address do
+			Sails::DeltaBuilder.build @wave, @address do
 				add_self
 			end
     end
     
+		@html = @wave.blips.map do |blip|
+			if blip.is_a? String
+				"<p><strong>#{blip}</strong></p>\n<p><em>by #{@wave.blip(blip).authors.join(', ')}</em></p>\n#{@wave.blip(blip).to_xml}\n<hr/>"
+			else
+				"<blockquote>\n#{render_html blip}\n</blockquote>"
+			end
+		end.join("\n")
+
   end
+  
+  def render_html blips
+  	blips.map do |blip|
+  		if blip.is_a? String
+				"<p><strong>#{blip}</strong></p>\n<p><em>by #{@wave.blip(blip).authors.join(', ')}</em></p>\n#{@wave.blip(blip).to_xml}\n<hr/>"
+			else
+				"<blockquote>\n#{render_html blip}\n</blockquote>"
+			end
+		end.join("\n")
+	end
   
   def ajax
 		@wave = @remote[params[:id]]
@@ -41,10 +63,19 @@ class WavesController < ApplicationController
   def update
 		@wave = @remote[params[:id]]
 		
+		if params[:message].empty?
+			render :text => 'Please enter a message.'
+			return
+		end
+		
 		if @wave.participants.include? @address
 		
-			Sails::Delta.build @remote, @wave, @address do |builder|
-				builder.new_blip_at_end params[:message]
+			Sails::DeltaBuilder.build @wave, @address do |builder|
+				if params[:parent] && params[:parent].any? && @wave.blip(params[:parent])
+					builder.new_blip_under params[:parent], params[:message]
+				else
+					builder.new_blip_at_end params[:message]
+				end
 			end
 			
     	#flash[:notice] = "Your message has been added."
@@ -64,7 +95,7 @@ class WavesController < ApplicationController
 		elsif !( params[:who] && @wave.participants.include?(params[:who]) )
     	flash[:error] = "#{params[:who]} isn't in this wave."
     else
-			Sails::Delta.build @remote, @wave, @address do |builder|
+			Sails::DeltaBuilder.build @wave, @address do |builder|
 				builder.remove_user params[:who]
 			end
     	flash[:notice] = "#{params[:who]} has been removed from the wave."
@@ -81,7 +112,7 @@ class WavesController < ApplicationController
 		elsif !params[:who] || @wave.participants.include?(params[:who])
     	flash[:error] = "#{params[:who]} is already in this wave."
     else
-			Sails::Delta.build @remote, @wave, @address do |builder|
+			Sails::DeltaBuilder.build @wave, @address do |builder|
 				builder.add_user params[:who]
 			end
     	flash[:notice] = "#{params[:who]} has been added to the wave."

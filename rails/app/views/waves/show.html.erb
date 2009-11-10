@@ -18,18 +18,20 @@
 <hr/>
 <p><strong><a name="contents">Contents</a></strong></p>
 <blockquote id="contents2">
-<% @wave.blips.flatten.each do |blip| -%>
+<%= @html %>
+<!--<% @wave.blips.flatten.each do |blip| -%>
 	<p><strong><%=h blip %></strong></p>
 	<p><em>by <%=h @wave.blip(blip).authors.join(', ') %></em></p>
 <%= @wave.blip(blip).to_xml %>
 	<hr/>
-<% end -%>
+<% end -%>-->
 </blockquote>
 <%= link_to_remote "Update", :update => "contents2", :url => "/waves/#{@wave.name}/ajax" %>
 
 
 <%= form_remote_tag :url => wave_update_path(@wave.name), :complete => "submitted();", :html => {'id' => 'add-form'} %>
-	Message: <%= text_field_tag "message" %><br/>
+	Message: <%= text_field_tag 'message' %><br/>
+	Add under: <%= text_field_tag 'parent' %> (leave blank unless you know what you are doing)<br/>
 	<%= submit_tag "Add new blip" %>
 </form>
 

@@ -27,15 +27,8 @@ class Blip
 		arr
 	end
 	
-	def create_mutation new
-		ops = []
-		same_count = 0
-		
-		old = self.to_arr
-		old_index = 0
-		new_index = 0
-		
-		
+	def digest
+		@contents.gsub("\001", '')
 	end
 	
 	# Dumps the current version of this Blip instance to XML. Note that said

@@ -13,7 +13,6 @@ module ApplicationHelper
 	end
 	
 	def empty?(field)
-		return true if field == nil
-		return field == ''
+		field.nil? || field.empty?
 	end
 end

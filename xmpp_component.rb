@@ -53,9 +53,7 @@ end
 key = Digest::SHA1.hexdigest(id + config['xmpp-password'])
 provider.send_data "<handshake>#{key}</handshake>"
 
-remote = SailsRemote.serve(provider)
-$remote = remote
-puts "DRb server running at #{remote.uri}"
+provider.start_remote
 
 trap("INT") do
 	remote.stop_service

@@ -1,30 +1,29 @@
 require 'drb'
 
-# Not inside the module, might move it later if the rails autoloader would
-# still work.
+module Sails
 
 # A class that's focused for use with DRb. There are a few methods that just
 # call deeper methods, since DRb only sends method calls to the server if
 # called on the main DRbObject. If it weren't for these methods, a DRb client
 # wouldn't be able to do much.
-class SailsRemote
+class Remote
 	attr_accessor :drb, :provider
 	
 	# Serve a remote up
-	def self.serve(provider, host=':9000')
-		remote = SailsRemote.new(provider)
-		remote.drb = DRb.start_service("druby://#{host}", remote)
+	def self.serve provider, host=':9000'
+		remote = Sails::Remote.new provider
+		remote.drb = DRb.start_service "druby://#{host}", remote
 		remote
 	end
 	
 	# Connect to a remote
-	def self.connect(host=':9000')
+	def self.connect host=':9000'
 		DRb.start_service
 		DRbObject.new nil, "druby://#{host}"
 	end
 	
 	# Create a remote for the provider
-	def initialize(provider)
+	def initialize provider
 		@provider = provider
 		@drb = nil
 	end
@@ -50,12 +49,12 @@ class SailsRemote
 	end
 	
 	# Look up and return a wave
-	def [](name)
+	def [] name
 		@provider[name]
 	end
 	
 	# Add a delta or wave
-	def <<(item)
+	def << item
 		if item.is_a? Wave
 			@provider << item
 		elsif item.is_a? Delta
@@ -69,23 +68,18 @@ class SailsRemote
 	# Add a delta to a wave (faster to give the wave's name). Also propagates the
 	# delta.
 	def add_delta(wave, delta)
-		if wave.is_a? Sails::Wave
+		if wave.is_a? Wave
 			wave << delta# unless wave.deltas.include?(delta)
 			wave = wave.name
 		end
 		self[wave] << delta
-		delta.propagate true
-	end
-	
-	# Generate a random alphanumeric string
-	def random_string(length=12)
-		@letters ||= ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
-		([''] * length).map { @letters[rand * @letters.size] }.join('')
 	end
 	
 	def new_local_wave
-		wave = Sails::Wave.new @provider
+		wave = Wave.new @provider
 		self << wave
 		wave
 	end
-end
+end # class
+
+end # module
