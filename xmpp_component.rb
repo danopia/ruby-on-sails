@@ -56,7 +56,7 @@ provider.send_data "<handshake>#{key}</handshake>"
 provider.start_remote
 
 trap("INT") do
-	remote.stop_service
+	provider.remote.stop_service
 	puts 'OBAI'
 	exit
 end
@@ -147,7 +147,7 @@ until provider.sock.closed?
 						cert.inner_text
 					end
 					
-					remote.all_waves.each do |wave|
+					provider.remote.all_waves.each do |wave|
 						wave.deltas.each_value do |delta|
 							next unless delta.is_a? Delta
 							next unless delta.signer_id == server.certificate_hash
@@ -221,7 +221,7 @@ until provider.sock.closed?
 						cert.inner_text
 					end
 					
-					remote.all_waves.each do |wave|
+					provider.remote.all_waves.each do |wave|
 						wave.deltas.each_value do |delta|
 							next unless delta.is_a? Delta
 							delta.server = server if delta.signer_id == server.certificate_hash

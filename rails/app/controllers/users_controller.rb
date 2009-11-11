@@ -33,12 +33,16 @@ class UsersController < ApplicationController
   # GET /users/1
   # GET /users/1.xml
   def show
-    @user = User.find(params[:id]) || @current_user
-    #@posts = @user.posts
-    #@posts.sort! { |a,b| b.created_at <=> a.created_at }
-    @page_title = 'User profile'
+    if params[:id].nil? || params[:id].empty?
+      @user = @current_user
+    elsif params[:id].to_i.to_s == params[:id]
+      @user = User.find(params[:id])
+    else
+      @user = User.find_by_login(params[:id])
+    end
 
-    render :action => 'show_self' if @user == @current_user
+    @page_title = 'User profile'
+    @self = @user == @current_user
   end
 
   def edit

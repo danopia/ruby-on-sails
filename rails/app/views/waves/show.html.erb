@@ -4,10 +4,10 @@
 <div class="error box">This wave currently has incomplete data. <%= @wave.complete? %></div>
 <% end -%>
 
-<p><em>Participants:</em>
-<% @wave.participants.each do |address| -%>
+<p id="participants"><em>Participants:</em>
+<!--<% @wave.participants.each do |address| -%>
 <%=mail_to address %> (<%=link_to 'remove', wave_remove_path(@wave.name, address) %>)
-<% end -%>
+<% end -%>-->
 
 <%= form_tag wave_add_path(@wave.name) %>
 <%= text_field_tag "who" %><%= submit_tag "Add participant" %>
@@ -17,27 +17,26 @@
 
 <hr/>
 <p><strong><a name="contents">Contents</a></strong></p>
-<blockquote id="contents2">
-<%= @html %>
-<!--<% @wave.blips.flatten.each do |blip| -%>
-	<p><strong><%=h blip %></strong></p>
-	<p><em>by <%=h @wave.blip(blip).authors.join(', ') %></em></p>
-<%= @wave.blip(blip).to_xml %>
-	<hr/>
-<% end -%>-->
-</blockquote>
-<%= link_to_remote "Update", :update => "contents2", :url => "/waves/#{@wave.name}/ajax" %>
+<div id="contents">
+<%#= @html %>
+</div>
 
 
 <%= form_remote_tag :url => wave_update_path(@wave.name), :complete => "submitted();", :html => {'id' => 'add-form'} %>
-	Message: <%= text_field_tag 'message' %><br/>
-	Add under: <%= text_field_tag 'parent' %> (leave blank unless you know what you are doing)<br/>
+	<%= text_field_tag 'message' %>
+	<!--Add under: <%= text_field_tag 'parent' %> (leave blank unless you know what you are doing)<br/>-->
 	<%= submit_tag "Add new blip" %>
 </form>
 
 <script type="text/javascript" src="/javascripts/prototype.js"></script>
 <script type="text/javascript">
+
+var contents = document.getElementById('contents');
+var participants = document.getElementById('participants');
+var version = 0; //<%=h @wave.version %>;
+
 var timer = 0;
+
 function queueUpdate() {
 	timer = setTimeout('update()', 1000);
 }
@@ -49,19 +48,90 @@ function submitted() {
 }
 function update() {
 	timer = 0;
-	new Ajax.Updater('contents2', '<%=wave_ajax_path @wave.name %>', {asynchronous:true, evalScripts:true, onSuccess:queueUpdate, onFailure:function(){alert('Error!');}, parameters:Form.serialize(document.getElementById('add-form'))});
-	/*new Ajax.Request('<%=wave_ajax_path @wave.name %>', {
-  method: 'get',
-  onSuccess: function(transport) {
-  	alert(transport.responseText);
-    //var notice = $('data');
-    if (transport.responseText.match(/href="http:\/\/prototypejs.org/))
-      notice.update('Yeah! You are in the Top 10!').setStyle({ background: '#dfd' });
-    else
-      notice.update('Damn! You are beyond #10...').setStyle({ background: '#fdd' });
-  }
-});*/
+	//new Ajax.Updater('contents2', '<%=wave_ajax_path @wave.name %>', {asynchronous:true, evalScripts:true, onSuccess:queueUpdate, onFailure:function(){alert('Error!');}, parameters:Form.serialize(document.getElementById('add-form'))});
+	new Ajax.Request('<%=wave_ajax_path @wave.name %>/' + version, {
+		method: 'get',
+		onSuccess: queueUpdate,
+		onFailure: function() { alert('Error!'); }
+	});
 
 }
 update();
+
+function reply_to(blip) {
+	blip = document.getElementById(blip);
+	reply = document.getElementById('reply-' + blip.id);
+	
+	form = document.createElement('form');
+	form.action = '<%=wave_update_path @wave.name %>';
+	form.id = 'reply-' + blip.id;
+	form.method = 'post';
+	form.onsubmit = function(){new Ajax.Request('<%=wave_update_path @wave.name %>', {asynchronous:true, evalScripts:true, onComplete:function(request){close_reply(blip.id);}, parameters:Form.serialize(this)}); return false;};
+	form.innerHTML = '<input id="box-' + blip.id + '" name="message" type="text" /><input name="parent" type="hidden" value="' + blip.id + '" /><input name="commit" type="submit" value="Reply" /> <a href="#" onclick="close_reply(\'' + blip.id + '\'); return false;">Cancel</a>';
+	
+	reply.removeChild(reply.firstChild);
+	reply.appendChild(form);
+	
+	box = document.getElementById('box-' + blip.id);
+	box.focus();
+}
+
+function close_reply(blip) {
+	blip = document.getElementById(blip);
+	reply = document.getElementById('reply-' + blip.id);
+	
+	link = document.createElement('a');
+	link.href = "#";
+	link.onclick = function(){ reply_to(blip.id); return false; };
+	link.innerHTML = 'reply';
+	
+	reply.removeChild(reply.firstChild);
+	reply.appendChild(link);
+}
+
+function update_blip(id, parent, by, text) {
+	node = document.getElementById('contents-' + id);
+	if (node != undefined) {
+		node.innerHTML = text;
+	} else {
+	
+		element = document.createElement('div');
+		element.id = id;
+		element.className = 'blip';
+		element.innerHTML = '<strong>' + id + '</strong> <em>by ' + by + '</em><p id="contents-' + id + '">' + text + '</p><p id="reply-' + id + '"><a href="#" onclick="reply_to(\'' + id + '\');return false;">reply</a></p>';
+		
+		if (parent == undefined) {
+			contents.appendChild(element);
+			window.scrollTo(0, document.body.scrollHeight);
+		} else {
+			indent = document.getElementById('indent-' + parent);
+			if (!indent) {
+				indent = document.createElement('blockquote');
+				indent.id = 'indent-' + parent;
+				parent = document.getElementById(parent);
+				parent.parentNode.insertBefore(indent, parent.nextSibling);
+			}
+			indent.appendChild(element);
+		}
+	}
+}
+
+function add_user(address, html) {
+	participants.innerHTML += '<div class="participant" id="' + address + '">' + html + ' (<a href="<%=wave_path @wave.name %>/remove/' + address + '">remove</a>)</div>';
+}
+
+function remove_user(address) {
+	node = document.getElementById(address);
+	participants.removeChild(node);
+}
+
 </script>
+
+<style>
+.blip {
+	border: 2px solid #eee;
+	-moz-border-radius: 5px;
+	padding: 1em 1em 0 1em;
+	margin-bottom: 1em;
+}
+</style>

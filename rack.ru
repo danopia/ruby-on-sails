@@ -22,32 +22,79 @@ class RackAdapter
 		connect # to the remote
 		
 		@wave = nil
-		1/0 unless env['PATH_INFO'] =~ /^\/waves\/(.+)$/
+		1/0 unless env['PATH_INFO'] =~ /^\/waves\/(.+)\/([0-9]+)$/
 		name = $1
+		version = $2.to_i
 		@wave = @remote[name]
-		version = @wave.newest_version
   	
   	elapsed = 0
-  	timer = EventMachine::PeriodicTimer.new(0.1) do
-  		elapsed += 0.1
+  	interval = 0.1
+  	
+  	timer = EventMachine::PeriodicTimer.new(interval) do
+  		elapsed += interval
 			if elapsed > 5 || @remote[name].newest_version > version
 				timer.cancel
 				
-				@wave = @remote[name]
-				version = @wave.newest_version
+				body = []
+				if @remote[name].newest_version > version
+					@wave = @remote[name]
+					#version = @wave.newest_version
+					until version == @remote[name].newest_version
+						delta = @wave[version + 1]
+						version = delta.version
+						
+						#body = @wave.blips.map do |blip|
+						#	if blip.is_a? String
+						#		"<p><strong>#{blip}</strong></p>\n<p><em>by #{@wave.blip(blip).authors.join(', ')}</em></p>\n#{@wave.blip(blip).to_xml}\n<hr/>"
+						#	else
+						#		"<blockquote>\n#{render_html blip}\n</blockquote>"
+						#	end
+						#end.join("\n")
+						
+						delta.operations.each do |operation|
+							if operation.is_a? Operations::Mutate
+								unless operation.document_id == 'conversation'
+									blip = @wave.blip operation.document_id
+									parent = @wave.parent(blip)
+									parent = if parent && parent.name.is_a?(String)
+										"'#{parent.name}'"
+									else
+										'undefined'
+									end
+									
+									authors = blip.authors.map do |author|
+										user, domain = author.split('@', 2)
+										if domain.downcase == @remote.provider.domain
+											#account = User
+											"<img src=\"/images/icons/ruby_go.png\" /> <a href=\"/users/#{user}\">#{user}</a>"
+										else
+											"<img src=\"/images/icons/ruby_go.png\" /> #{author}"
+										end
+									end
+									
+									body << "update_blip('#{blip.name}', #{parent}, '#{authors.join(', ')}', \"#{escape_js blip.to_xml}\");"
+								end # unless
+							elsif operation.is_a? Operations::AddUser
+								operation.who.each do |who|
+									user, domain = who.split('@', 2)
+									body << if (domain||'').downcase == @remote.provider.domain
+										#account = User
+										"add_user('#{who}', '<img src=\"/images/icons/ruby_go.png\" /> <a href=\"/users/#{user}\">#{user}</a>');"
+									else
+										"add_user('#{who}', '<img src=\"/images/icons/ruby_go.png\" /> #{who}');"
+									end
+								end # each
+							end # if
+						end # each
+					end # until
+				end # if
 				
-				body = @wave.blips.map do |blip|
-					if blip.is_a? String
-						"<p><strong>#{blip}</strong></p>\n<p><em>by #{@wave.blip(blip).authors.join(', ')}</em></p>\n#{@wave.blip(blip).to_xml}\n<hr/>"
-					else
-						"<blockquote>\n#{render_html blip}\n</blockquote>"
-					end
-				end.join("\n")
+				body << "version = #{version};"
 				
 				env['async.callback'].call [200, {
 					'Cache-Control' => 'no-cache',
-					'Content-Type' => 'text/xml; charset=utf-8',
-				}, body]
+					'Content-Type' => 'text/javascript; charset=utf-8',
+				}, body.uniq.join("\n")]
 				
 				env['rack.errors'].write %{%s - %s [%s] "%s %s%s %s" %d\n} % [
         env['HTTP_X_FORWARDED_FOR'] || env["REMOTE_ADDR"] || "-",
@@ -59,22 +106,12 @@ class RackAdapter
         env["HTTP_VERSION"],
         200 ]
 				
-			end
+			end # timer block
 		
-		end
+		end # def call
 
   	[-1, {}, []]
   end
-  
-  def render_html blips
-  	blips.map do |blip|
-  		if blip.is_a? String
-				"<p><strong>#{blip}</strong></p>\n<p><em>by #{@wave.blip(blip).authors.join(', ')}</em></p>\n#{@wave.blip(blip).to_xml}\n<hr/>"
-			else
-				"<blockquote>\n#{render_html blip}\n</blockquote>"
-			end
-		end.join("\n")
-	end
   
 #	data = "<script type=\"text/javascript\">
 #	document.getElementById('data').innerHTML = \"#{escape_js wave.to_xml}\";
@@ -87,7 +124,7 @@ class RackAdapter
   	text.gsub('<', '&lt;').gsub('>', '&gt;')
   end
   def escape_js text
-  	escape(text).gsub('\\', '\\\\').gsub('"', '\\"').gsub("\n", ' ')
+  	text.gsub('\\', '\\\\').gsub('"', '\\"')
   end
 end # class
 end # module

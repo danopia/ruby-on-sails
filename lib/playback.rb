@@ -92,6 +92,26 @@ class Playback
 	end
 	alias blip []
 	
+	def parent blip
+		blip find(blip.name, @blips)
+	end
+	
+	def find needle, haystack
+		haystack.each do |item|
+			if item.is_a? Array
+				result = find(needle, item)
+				if result == true
+					return haystack[haystack.index(item) - 1]
+				elsif result
+					return result
+				end
+			elsif item == needle
+				return true
+			end
+		end
+		nil
+	end
+	
 	protected
 	
 	# Apply a mutation. Does NO version checking!
