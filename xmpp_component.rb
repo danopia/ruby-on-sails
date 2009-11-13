@@ -112,6 +112,7 @@ until provider.sock.closed?
 					(node['start-version'].to_i..node['end-version'].to_i).each do |version|
 						delta = wave[version]
 						next unless delta.is_a? Delta
+						next if delta.version != version
 						payload << "<item><applied-delta xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><![CDATA[#{encode64 delta.to_applied}]]></applied-delta></item>"
 					end
 					
