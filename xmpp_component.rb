@@ -9,6 +9,10 @@ include Sails
 
 require 'agents/echoey'
 
+#pp Sails::ProtoBuffer.parse(:applied_delta, Sails::decode64('CrUDCogBCjIIABIud2F2ZTovL2Jsb3Nzb21pbmsuY29tL3crTkR5OUJYU19XUXY1L2NvbnYrcm9vdBISY3IwQGJsb3Nzb21pbmsuY29tGhQKEmNyMEBibG9zc29taW5rLmNvbRooGiYKDGNvbnZlcnNhdGlvbhIWChAaDgoMY29udmVyc2F0aW9uCgIgARKnAgqAAont/LwwUS9M9SEUDI9DZpB0bkzb2M7x6CK5ja3qntBQwaOUG7EiubR7hqPpabbbZxqBAOGTUGBu72JQ+f2Hrr6cTQBsxkmjBJHLMKXps7cCIgLKqutusLacWn8XvpNb8LbwZLn3zFE9dmOo33qScBNxdSNV6G8TWMup8w3MMogNA97919jmN2ZumY5kHc3NTRbZh6EDbBiWtMsln6NlSJW5bEVDyhb2U2F9RbrkxLwuMX7+Jvm24KDS06dwHHlHLwQq8Ai8AwJep4d8w4tRyzpjZsl9gsuQcSstJQNr+pk8xVAOU+6HAQbX+w5VJyXiMjrHtwKf/MQcEJ+ZrQscrf8SIAgi7khcU7pIACd++yczlc6rQq/rIkPQj2/lwM1RkTMFGAESMggAEi53YXZlOi8vYmxvc3NvbWluay5jb20vdytORHk5QlhTX1dRdjUvY29udityb290GAIgq/f/+84k'))
+#pp Sails::ProtoBuffer.parse(:applied_delta, Sails::decode64('CtcDCqoBChgIAhIUy+RktD6l/Xjf1xJlw5/qeVBI5fwSEmNyMEBibG9zc29taW5rLmNvbRoOGgwKCGIrQ01BZHlzEgAaMBouCghiK0NNQWR5cxIiCggaBgoEYm9keQoIGgYKBGxpbmUKAiABCgQSAmhpCgIgARo4GjYKDGNvbnZlcnNhdGlvbhImCgIoAQoYGhYKBGJsaXASDgoCaWQSCGIrQ01BZHlzCgIgAQoCKAESpwIKgAJuxgn+sRpvAjQbWsaT/l3Ci2M4tYJJLs1T+XCRWVfV2tWTzPs7Bk73MXOaNRp/aCjOk5Vg/lnZ2bxkQZsryRE/pcWx/P4TWl3JLFQN0qa2EVAI5JBX75/IjOp+zxa4KG69bdo0vc8ID2Kfw+IpXCQmOJJO2KoVcpdEry6sGgF4crHrJHy2Wfa8rhQo5XN/K9+GvJJb32shWAXbcNpbKTf9wXkNRWNCCKJySk51yLF9YnfuYKHseTdjBSyG9TD4adiTnnLMuSt3x7pwEDmIhF/s+JJrVQ6gekRcvT6PdJttTH1bOu97+wxl0grSb7B3b4gnRg7cjNxkId/rsQwXIUwlEiAIIu5IXFO6SAAnfvsnM5XOq0Kv6yJD0I9v5cDNUZEzBRgBEhgIAhIUy+RktD6l/Xjf1xJlw5/qeVBI5fwYAyCssoD8ziQ='))
+#exit
+
 puts "Loading config"
 begin
 	config = YAML.load(File.open('sails.conf'))
@@ -240,9 +244,9 @@ until provider.sock.closed?
 					end
 					
 				elsif (packet/'pubsub/items/item/applied-delta').any?
-					wave = ids[id]
-					if wave
-						ids.delete id
+					id =~ /^100-(.+)$/
+					if $1 && provider[$1]
+						wave = provider[$1]
 						puts "Got history for #{wave.name}"
 						
 						(packet/'pubsub/items/item/applied-delta').each do |update|

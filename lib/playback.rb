@@ -41,8 +41,8 @@ class Playback
 			delta = @wave[version]
 		else
 			delta = version
-			version = delta.version
 		end
+		version = delta.version
 		
 		if version <= @version
 			puts "Delta #{version} is already applied; at #{@version}."
@@ -140,6 +140,7 @@ class Playback
 	end
 	
 	def read_conv
+		p @conv
 		stack = [[]]
 		
 		@conv.each do |item|

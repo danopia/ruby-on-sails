@@ -67,7 +67,7 @@ function reply_to(blip) {
 	form.id = 'reply-' + blip.id;
 	form.method = 'post';
 	form.onsubmit = function(){new Ajax.Request('<%=wave_update_path @wave.name %>', {asynchronous:true, evalScripts:true, onComplete:function(request){close_reply(blip.id);}, parameters:Form.serialize(this)}); return false;};
-	form.innerHTML = '<input id="box-' + blip.id + '" name="message" type="text" /><input name="parent" type="hidden" value="' + blip.id + '" /><input name="commit" type="submit" value="Reply" /> <a href="#" onclick="close_reply(\'' + blip.id + '\'); return false;">Cancel</a>';
+	form.innerHTML = '<input id="box-' + blip.id + '" name="message" type="text" style="width: 50%;" /><input name="parent" type="hidden" value="' + blip.id + '" /><input name="commit" type="submit" value="Reply" /> <a href="#" onclick="close_reply(\'' + blip.id + '\'); return false;">Cancel</a>';
 	
 	reply.removeChild(reply.firstChild);
 	reply.appendChild(form);

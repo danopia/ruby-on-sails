@@ -85,21 +85,24 @@ class Wave < Playback
 		first = [first.version, first.hash] if first.is_a? BaseDelta
 		last = [last.version, last.hash] if last.is_a? BaseDelta
 		
-		@server << ['iq', 'get', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"#{first[0]}\" start-version-hash=\"#{encode64(first[1])}\" end-version=\"#{last[0]}\" end-version-hash=\"#{encode64(last[1])}\" wavelet-name=\"#{self.conv_root_path}\"/></items></pubsub>"]
+		@server << ['iq', 'get', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"#{first[0]}\" start-version-hash=\"#{encode64(first[1])}\" end-version=\"#{last[0]}\" end-version-hash=\"#{encode64(last[1])}\" wavelet-name=\"#{self.conv_root_path}\"/></items></pubsub>", "100-#{@name}"]
 	end
 	
 	def request_cert delta, signer_id=nil
 		if delta.is_a? BaseDelta
-			delta = [delta.prev_hash, delta.prev_version]
+			delta = [delta.prev_version[:hash], delta.prev_version[:version]]
 			signer_id ||= delta.signer_id
 		end
 		
-		@server << ['iq', 'get', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"signer\"><signer-request xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" signer-id=\"#{encode64 signer_id}\" history-hash=\"#{encode64 delta[0]}\" version=\"#{delta[1]}\" wavelet-name=\"#{conv_root_path}\"/></items></pubsub></iq>"]
+		@server << ['iq', 'get', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"signer\"><signer-request xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" signer-id=\"#{encode64 signer_id}\" history-hash=\"#{encode64 delta[0]}\" version=\"#{delta[1]}\" wavelet-name=\"#{conv_root_path}\"/></items></pubsub>"]
 	end
 	
-	def post delta
+	def post delta, force=false
 		return unless delta.local?
 		
+		return if delta.commited? && !force
+		delta.commited = true
+				
 		@server << ['iq', 'set', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"wavelet\"><item><submit-request xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><delta wavelet-name=\"#{conv_root_path}\"><![CDATA[#{encode64(delta.to_s)}]]></delta></submit-request></item></publish></pubsub>"]
 	end
 	

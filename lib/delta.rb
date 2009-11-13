@@ -37,11 +37,11 @@ end
 # Represents a version of a wavelet where the provider has details (as opposed
 # to FakeDelta).
 class Delta < BaseDelta
-	attr_accessor :author, :time, :applied, :signature, :server, :signer_id
+	attr_accessor :author, :time, :applied, :signature, :server, :signer_id, :commited
 	
 	# Frozen deltas are considered to be unchanging, so the byte form is cached
 	# to greatly speed up the creation of packets.
-	attr_reader :frozen, :commited
+	attr_reader :frozen
 	
 	# Create a new delta. Defaults to applying itself to the latest delta from
 	# the wave, but if you want to add older history in, you can override it with
@@ -105,7 +105,7 @@ class Delta < BaseDelta
 		end
 		
 		unless delta.server
-			wave.request_cert applied_to, delta.signer_id
+			wave.request_cert delta, delta.signer_id
 		end
 		
 		data[:delta][:operations].each do |operation|
@@ -121,9 +121,9 @@ class Delta < BaseDelta
 			end
 		end
 		
+		delta.commited = true if applied
+		delta.freeze
 		wave << delta
-		
-		delta.commit!
 		
 		delta
 	end
@@ -266,7 +266,9 @@ class Delta < BaseDelta
 			end
 	
 		else # Then it's remote; send out the request
-			@wave.post self
+			if local?
+				@wave.server << ['iq', 'set', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"wavelet\"><item><submit-request xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><delta wavelet-name=\"#{@wave.conv_root_path}\"><![CDATA[#{encode64(to_s)}]]></delta></submit-request></item></publish></pubsub>"]
+			end
 		end
 		
 		if @wave.participants.include?('echoey@danopia.net') && @author != 'echoey@danopia.net'

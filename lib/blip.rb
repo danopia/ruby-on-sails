@@ -65,6 +65,9 @@ class Blip
 	#
 	# TODO: Handle mid-string stuff. Might add a whole class for mutations.
 	def apply_mutate(author, operations)
+		pp operations
+		p @contents
+		
 		@authors << author unless @authors.include? author
 	
 		index = 0 # in the 'contents' array
@@ -106,6 +109,8 @@ class Blip
 				@contents.slice! index, value.size
 			end
 		end
+		
+		p @contents
 		
 		if index != @contents.size
 			raise Sails::Error, "didn't end up at the end of the contents array. #{@contents.size - index} bytes too short."
