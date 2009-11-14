@@ -104,7 +104,7 @@ class Provider
 	# Pass a packet ID in the +type+ field to make it into a 'result' with the
 	# correct ID.
 	def send_xml(name, type, to, contents, id=nil)
-		if type.to_i > 0 || type =~ /^purple/ || type.include?('postsigner')
+		if type.to_i > 0 || type =~ /^purple/ || type.include?('postsigner') || type.include?('history') || type.include?('submit')
 			id = type
 			type = 'result'
 		else

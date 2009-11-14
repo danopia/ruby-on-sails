@@ -108,22 +108,25 @@ until provider.sock.closed?
 					
 					node = (packet/'pubsub/items/delta-history').first
 					wave = provider.find_or_create_wave node['wavelet-name']
+					wave.boom = true if wave.deltas.size == 1 && wave.local?
 					
 					payload = ''
-					version = node['start-version'].to_i
-					until version > node['end-version'].to_i
-						delta = wave[version]
-						version = delta.version
-						if delta.is_a? Delta
-							payload << "<item><applied-delta xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><![CDATA[#{encode64 delta.to_applied}]]></applied-delta></item>"
+					unless wave.boom
+						version = node['start-version'].to_i
+						until version > node['end-version'].to_i
+							delta = wave[version]
+							version = delta.version
+							if delta.is_a? Delta
+								payload << "<item><applied-delta xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><![CDATA[#{encode64 delta.to_applied}]]></applied-delta></item>"
+							end
+							version += 1
 						end
-						version += 1
+						
+						payload << "<item><commit-notice xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" version=\"#{delta.version}\"/></item>"
+						#if wave.newest_version > delta.version
+							payload << "<item><history-truncated xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" version=\"#{delta.version}\"/></item>"
+						#end
 					end
-					
-					payload << "<item><commit-notice xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" version=\"#{delta.version}\"/></item>"
-					#if wave.newest_version > delta.version
-						payload << "<item><history-truncated xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" version=\"#{delta.version}\"/></item>"
-					#end
 					
 					provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items>#{payload}</items></pubsub>"
 					

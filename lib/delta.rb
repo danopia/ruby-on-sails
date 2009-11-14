@@ -127,8 +127,7 @@ class Delta < BaseDelta
 			
 			delta.server << ['message', 'normal', "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(delta.to_applied)}]]></applied-delta></wavelet-update></item></items></event>"]
 			
-			delta
-			return
+			return delta
 		end
 		
 		delta.commited = true if applied
@@ -149,7 +148,7 @@ class Delta < BaseDelta
 	def delta_data
 		hash = {
 			:applied_to => prev_version,
-			:author => @author}
+			:author => @author.downcase}
 		hash[:operations] = @operations.map{|op|op.to_hash} if @operations.any?
 		hash
 	end

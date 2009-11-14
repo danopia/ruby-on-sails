@@ -29,7 +29,7 @@ end
 class AddUser < UserOperation
 	# Create a hash, for use in ProtoBuffer encoding methods.
 	def to_hash
-		{:added => @who}
+		{:added => @who.map{|who|who.downcase}}
 	end
 	
 	# Human-readable string; i.e. "Added me@danopia.net to the wave"
@@ -53,7 +53,7 @@ end
 class RemoveUser < UserOperation
 	# Create a hash, for use in ProtoBuffer encoding methods.
 	def to_hash
-		{:removed => @who}
+		{:removed => @who.map{|who|who.downcase}}
 	end
 	
 	# Human-readable string; i.e. "Removed me@danopia.net from the wave"
