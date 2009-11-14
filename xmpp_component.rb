@@ -173,9 +173,10 @@ until provider.sock.closed?
 				elsif (packet/'publish').any?
 					puts "Publish request from #{from} for one of my waves"
 					node = (packet/'publish/item/submit-request/delta').first
+					p decode64(node.inner_text)
 					delta = Delta.parse(provider, node['wavelet-name'], decode64(node.inner_text))
 					
-					provider.send_xml 'message', id, from, "<received xmlns=\"urn:xmpp:receipts\"/>"
+					provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish><item><submit-response xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" application-timestamp=\"#{delta.time}\" operations-applied=\"#{delta.operations.size}\"><hashed-version history-hash=\"#{encode64 delta.hash}\" version=\"#{delta.version}\"/></submit-response></item></publish></pubsub>"
 				end
 				
 			when [:iq, :result]
