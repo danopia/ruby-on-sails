@@ -9,8 +9,10 @@ include Sails
 
 require 'agents/echoey'
 
-#pp Sails::ProtoBuffer.parse(:applied_delta, Sails::decode64('CrUDCogBCjIIABIud2F2ZTovL2Jsb3Nzb21pbmsuY29tL3crTkR5OUJYU19XUXY1L2NvbnYrcm9vdBISY3IwQGJsb3Nzb21pbmsuY29tGhQKEmNyMEBibG9zc29taW5rLmNvbRooGiYKDGNvbnZlcnNhdGlvbhIWChAaDgoMY29udmVyc2F0aW9uCgIgARKnAgqAAont/LwwUS9M9SEUDI9DZpB0bkzb2M7x6CK5ja3qntBQwaOUG7EiubR7hqPpabbbZxqBAOGTUGBu72JQ+f2Hrr6cTQBsxkmjBJHLMKXps7cCIgLKqutusLacWn8XvpNb8LbwZLn3zFE9dmOo33qScBNxdSNV6G8TWMup8w3MMogNA97919jmN2ZumY5kHc3NTRbZh6EDbBiWtMsln6NlSJW5bEVDyhb2U2F9RbrkxLwuMX7+Jvm24KDS06dwHHlHLwQq8Ai8AwJep4d8w4tRyzpjZsl9gsuQcSstJQNr+pk8xVAOU+6HAQbX+w5VJyXiMjrHtwKf/MQcEJ+ZrQscrf8SIAgi7khcU7pIACd++yczlc6rQq/rIkPQj2/lwM1RkTMFGAESMggAEi53YXZlOi8vYmxvc3NvbWluay5jb20vdytORHk5QlhTX1dRdjUvY29udityb290GAIgq/f/+84k'))
-#pp Sails::ProtoBuffer.parse(:applied_delta, Sails::decode64('CtcDCqoBChgIAhIUy+RktD6l/Xjf1xJlw5/qeVBI5fwSEmNyMEBibG9zc29taW5rLmNvbRoOGgwKCGIrQ01BZHlzEgAaMBouCghiK0NNQWR5cxIiCggaBgoEYm9keQoIGgYKBGxpbmUKAiABCgQSAmhpCgIgARo4GjYKDGNvbnZlcnNhdGlvbhImCgIoAQoYGhYKBGJsaXASDgoCaWQSCGIrQ01BZHlzCgIgAQoCKAESpwIKgAJuxgn+sRpvAjQbWsaT/l3Ci2M4tYJJLs1T+XCRWVfV2tWTzPs7Bk73MXOaNRp/aCjOk5Vg/lnZ2bxkQZsryRE/pcWx/P4TWl3JLFQN0qa2EVAI5JBX75/IjOp+zxa4KG69bdo0vc8ID2Kfw+IpXCQmOJJO2KoVcpdEry6sGgF4crHrJHy2Wfa8rhQo5XN/K9+GvJJb32shWAXbcNpbKTf9wXkNRWNCCKJySk51yLF9YnfuYKHseTdjBSyG9TD4adiTnnLMuSt3x7pwEDmIhF/s+JJrVQ6gekRcvT6PdJttTH1bOu97+wxl0grSb7B3b4gnRg7cjNxkId/rsQwXIUwlEiAIIu5IXFO6SAAnfvsnM5XOq0Kv6yJD0I9v5cDNUZEzBRgBEhgIAhIUy+RktD6l/Xjf1xJlw5/qeVBI5fwYAyCssoD8ziQ='))
+#p decode64('0WFlTgb6mmTCHSDgCrKXUjzlrJQ=')
+#pp Sails::ProtoBuffer.parse(:signed_delta, Sails::decode64('CkYKGAgGEhT0je9m2vOMhjMJEoVmAqMS4EWohRIXZGFub3BpYUB3YXZlc2FuZGJveC5jb20aERoPCgtiK2FPcEFSSVVxQRIAEqcBCoABvnFuxrzgHiiC+aYno0cifTS3OPe4b7+7weTuKPsqEr48b9NLjchevrDMkbdxlVWGfM1NbFwt2jdUfkfqRabLrSucKfTmc0zcnKx6S8GyCtdwLI2Zeswc3hODAJnixkFOKC0Ngr0weu88a9GKSHAZOcgH/a4Rr1rTA2YyEwj0bw4SICeNLxl7VajoxsVnJmg0kSdzL6JV+M5dt4PY5rK8PXgPGAE='))
+#pp Sails::ProtoBuffer.parse(:applied_delta, Sails::decode64('CtoDCq0BChgIBRIUXDieJYF3iC7QZEokjPtelWUJHzkSE2Rhbm9waWFAZGFub3BpYS5uZXQaDBoKCghiK2JJRk1jdho0GjIKCGIrYklGTWN2EiYKCBoGCgRib2R5CggaBgoEbGluZQoCIAEKCBIGc2Vjb25kCgIgARo4GjYKDGNvbnZlcnNhdGlvbhImCgIoAwoYGhYKBGJsaXASDgoCaWQSCGIrYklGTWN2CgIgAQoCKAESpwIKgAKA7t/EDuc2hZDb76C25dhv1XHyELPO1Uh8z57qFK/6MCWgqSFPMhHbJtGNY897JME4lMOwZxn8zvbb/faZybG8OjCdP2SfAkc3TCHkRDYgzueb55P/0u9YkWIwU36hA36PAZGkY89rhPqDD72BhPMwN2BFzBH4BRHULCHcSINDqifvRVgzjQzwCJtRvmFYP2oNIIV2ykfD/mi8N54YNRtTJ0lVimzqAWgejMzyKSHytrdHz3bbTENH4LzU/t3rmb8loGmcPWC7ViUnT1/mSkq5z3r8DyJz5ko9zd1FIb3XOTv5oqV9Fu/R2/T5wADKYEZUKvdI4JBpfdscDonPVWExEiAdyXdvzKSygypuaEBkdGXE8UpNVJiHIGFPRVbkdj503xgBEhgIBRIUXDieJYF3iC7QZEokjPtelWUJHzkYAyCY5sv/ziQ='))
+#pp Sails::ProtoBuffer.parse(:applied_delta, Sails::decode64('CvYCCkoKGAgFEhQvBZmb0uOYBty0+nm+iuQNq1ceTRITZGFub3BpYUBkYW5vcGlhLm5ldBoZChdkYW5vcGlhQHdhdmVzYW5kYm94LmNvbRKnAgqAAo3k9+5NRzw5hmSubqfZqLwvunaBleZpCK+l7K/dFlxXVWjFmxv8BwO6N3xiLbS5UDp8kwjT6H3ILgRkmyn5TgbGYFpkAu5dqB9v0pplpWXPKZHaSVmCVw08EbV0UsKgc5LKMK9EVIcKP4+7iods4OEn5AbcQPhyvvYz+K9ShqMENYPKJWyb4WArH/r0kTCARa++KUdmhDF1vKCTICEPWY6eZsM55xOyhWgu8qNzueWAlAUHdRGObP83k6c76PvPzbLZajzaM1CHgzbUUp0O7wmBUKcL+D1RRI4QbELMQtHLKdq6VUzAVbZWYgPQupDhFwqy07ap97Z6jj19gcjPAMASIB3Jd2/MpLKDKm5oQGR0ZcTxSk1UmIcgYU9FVuR2PnTfGAESGAgFEhQvBZmb0uOYBty0+nm+iuQNq1ceTRgBIJCA2oHPJA=='))
 #exit
 
 puts "Loading config"
@@ -71,7 +73,6 @@ end
 
 puts 'Entering program loop'
 
-ids = {} # used for history requests
 until provider.sock.closed?
 	packets = provider.read
 	
@@ -109,15 +110,20 @@ until provider.sock.closed?
 					wave = provider.find_or_create_wave node['wavelet-name']
 					
 					payload = ''
-					(node['start-version'].to_i..node['end-version'].to_i).each do |version|
+					version = node['start-version'].to_i
+					until version > node['end-version'].to_i
 						delta = wave[version]
-						next unless delta.is_a? Delta
-						next if delta.version != version
-						payload << "<item><applied-delta xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><![CDATA[#{encode64 delta.to_applied}]]></applied-delta></item>"
+						version = delta.version
+						if delta.is_a? Delta
+							payload << "<item><applied-delta xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><![CDATA[#{encode64 delta.to_applied}]]></applied-delta></item>"
+						end
+						version += 1
 					end
 					
-					payload << "<item><commit-notice xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" version=\"#{wave[node['end-version'].to_i].version}\"/></item>"
-					payload << "<item><history-truncated xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" version=\"#{wave[node['end-version'].to_i].version}\"/></item>"
+					payload << "<item><commit-notice xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" version=\"#{delta.version}\"/></item>"
+					#if wave.newest_version > delta.version
+						payload << "<item><history-truncated xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" version=\"#{delta.version}\"/></item>"
+					#end
 					
 					provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items>#{payload}</items></pubsub>"
 					
@@ -291,7 +297,7 @@ until provider.sock.closed?
 								wave = delta.wave if delta
 							end
 							
-							wave.apply(:newest) if wave && wave.complete?(ids)
+							wave.apply(:newest) if wave && wave.complete?(true)
 						end
 						
 						provider.send_xml 'message', 'normal', from, '<received xmlns="urn:xmpp:receipts"/>', id

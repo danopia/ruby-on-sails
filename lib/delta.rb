@@ -86,6 +86,7 @@ class Delta < BaseDelta
 		end
 		
 		wave = provider.find_or_create_wave wavelet
+		wave.boom = true if wave.deltas.size == 1 && wave.local?
 		
 		delta = Delta.new(wave, data[:delta][:author])
 		delta.version = data[:delta][:applied_to][:version]
@@ -121,6 +122,15 @@ class Delta < BaseDelta
 			end
 		end
 		
+		if wave.boom
+			puts "Sending back the delta as applied, even though the wave went boom."
+			
+			delta.server << ['message', 'normal', "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(delta.to_applied)}]]></applied-delta></wavelet-update></item></items></event>"]
+			
+			delta
+			return
+		end
+		
 		delta.commited = true if applied
 		delta.freeze
 		wave << delta
@@ -137,9 +147,11 @@ class Delta < BaseDelta
 	# Dumps the raw delta to a hash. Not ready to send out, but used for
 	# signing and building the full packets.
 	def delta_data
-		{	:applied_to => prev_version,
-			:author => @author,
-			:operations => @operations.map{|op|op.to_hash}}
+		hash = {
+			:applied_to => prev_version,
+			:author => @author}
+		hash[:operations] = @operations.map{|op|op.to_hash} if @operations.any?
+		hash
 	end
 	
 	# Dumps the raw delta to a ProtoBuffer string. Used for signing.
@@ -188,6 +200,12 @@ class Delta < BaseDelta
 	# Get an "applied delta", ready to send out to slave servers.
 	def to_applied
 		return @to_applied if @to_applied && @frozen
+		pp({
+			:signed_delta => to_s,
+			:applied_to => prev_version,
+			:operations_applied => @operations.size, # operations applied
+			:timestamp => @time#.to_i * 1000 # milliseconds not needed yet
+		})
 		@to_applied = Sails::ProtoBuffer.encode(:applied_delta, {
 			:signed_delta => to_s,
 			:applied_to => prev_version,

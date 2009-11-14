@@ -78,9 +78,7 @@ class Mutate < Operation
 	end
 	
 	def to_hash
-		hash = {:mutate => {
-			:mutation => {},
-			:document_id => @document_id}}
+		hash = {:mutate => {:document_id => @document_id, :mutation => {}}}
 			
 		hash[:mutate][:mutation][:components] = @components if @components.any?
 		hash

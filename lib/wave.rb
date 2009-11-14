@@ -3,7 +3,7 @@ module Sails
 
 # Represents a Wave, either local or remote.
 class Wave < Playback
-	attr_accessor :provider, :server, :name, :deltas
+	attr_accessor :provider, :server, :name, :deltas, :boom
 	
 	# Create a new wave. +name+ defaults to a random value and +host+ defaults
 	# to the local provider's name.
@@ -84,6 +84,8 @@ class Wave < Playback
 		last ||= self.newest
 		first = [first.version, first.hash] if first.is_a? BaseDelta
 		last = [last.version, last.hash] if last.is_a? BaseDelta
+		p first
+		p last
 		
 		@server << ['iq', 'get', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"#{first[0]}\" start-version-hash=\"#{encode64(first[1])}\" end-version=\"#{last[0]}\" end-version-hash=\"#{encode64(last[1])}\" wavelet-name=\"#{self.conv_root_path}\"/></items></pubsub>", "100-#{@name}"]
 	end
@@ -111,14 +113,16 @@ class Wave < Playback
 	# Pass true as the argument to request more history if incomplete; pass a
 	# Hash and it'll set key packet-id to the current Wave.
 	def complete?(request_more=false)
+		complete = true
 		@deltas.each_value do |delta|
 			if delta.is_a?(FakeDelta) && delta.version != 0
-				request_history nil, delta
-				return false
+				complete = false
 			end
 		end
 		
-		true
+		return complete if complete || !request_more
+		
+		request_history nil, self.newest
 	end
 	
 	def build_delta author, &block
