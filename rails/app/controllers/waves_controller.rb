@@ -71,10 +71,18 @@ class WavesController < ApplicationController
 		if @wave.participants.include? @address
 		
 			Sails::DeltaBuilder.build @wave, @address do |builder|
-				if params[:parent] && params[:parent].any? && @wave.blip(params[:parent])
-					builder.new_blip_under params[:parent], params[:message]
+				blip = builder.new_blip
+				if params[:message].include? '--'
+					parts = params[:message].split '--', 2
+					builder.first_line_header blip, parts.first, parts.last
 				else
-					builder.new_blip_at_end params[:message]
+					builder.first_line blip, params[:message]
+				end
+				
+				if params[:parent] && params[:parent].any? && @wave.blip(params[:parent])
+					builder.add_blip_under blip, params[:parent]
+				else
+					builder.add_blip_at_end blip
 				end
 			end
 			

@@ -72,6 +72,22 @@ class DeltaBuilder
 		]
 	end
 	
+	def first_line_header blip, header, message
+		mutate blip, [
+			{:element_start=>{:type=>"body"}},
+			
+			{:element_start=>{:type=>"line", :attributes => [{:key => 't', :value => 'h1'}]}},
+			{:element_end => true},
+			{:characters => header},
+			
+			{:element_start=>{:type=>"line"}},
+			{:element_end => true},
+			{:characters => message},
+			
+			{:element_end => true}
+		]
+	end
+	
 	def append_line blip, message
 		blip = @wave.blip(blip) unless blip.is_a? Sails::Blip
 		

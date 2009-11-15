@@ -35,7 +35,7 @@ class Blip
 	# Dumps the current version of this Blip instance to XML. Note that said
 	# XML probably won't be value XML in practice.
 	def to_xml
-		puts "---------"
+		#puts "---------"
 		
 		element_stack = []
 		special_index = 0
@@ -50,7 +50,7 @@ class Blip
 				users << $1
 			end
 		end
-		puts "indexes: #{annotations.keys.join ', '}"
+		#puts "indexes: #{annotations.keys.join ', '}"
 		
 		string = @contents.clone
 		@contents.size.times do |index|
@@ -71,35 +71,58 @@ class Blip
 			end
 		end
 		
-		p users
+		#p users
 		string += users.map do |user|
 			"<span class=\"blinkybit\">#{user}</span>"
 		end.join ''
 		
-		puts "---------"
+		#puts "---------"
 		
-		string.gsub "\001" do
+		open = false
+		string.gsub! "\001" do
 			item = @special[special_index]
 			special_index += 1
 			
 			if item == :end
+				next '' if (element_stack.last.nil? || element_stack.last == 'body') && element_stack.pop.nil?
 				"</#{element_stack.pop}>"
 				
 			elsif item.is_a? Element
-				element_stack << item.type
 				
-				attribs = ''
-				item.each_pair do |key, value|
-					attribs << " #{key}=\"#{value}\""
+				if item.type == 'line'
+					tag = 'p'
+					tag = item['t'] if item['t']
+					
+					element_stack << nil
+					opening = "<#{tag}>"
+					if open
+						opening = "</#{open}>#{opening}"
+					end
+					open = tag
+					
+					opening
+				
+				else
+					element_stack << item.type
+					
+					next '' if item.type == 'body'
+					
+					attribs = ''
+					item.each_pair do |key, value|
+						attribs << " #{key}=\"#{value}\""
+					end
+					
+					"<#{item.type}#{attribs}>"
 				end
-				
-				"<#{item.type}#{attribs}>"
 				
 			else
 				raise Sails::Error, "unknown document content type: #{item.class}"
 			end
 			
 		end
+		
+		string += "</#{open}>" if open
+		string
 	end
 	
 	# Apply a mutation. Does NO version checking!
@@ -133,6 +156,15 @@ class Blip
 				@contents.insert index, "\001"
 				@special.insert special_index, element
 				move_annotations index
+				index += 1
+				special_index += 1
+			
+			elsif component[:update_attributes]
+				element = @special[special_index]
+				(value[:updates] || []).each do |attribute|
+					element[attribute[:key]] = attribute[:new_value]
+				end
+				
 				index += 1
 				special_index += 1
 			

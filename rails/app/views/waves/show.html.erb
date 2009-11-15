@@ -98,7 +98,7 @@ function update_blip(id, parent, by, text) {
 		element = document.createElement('div');
 		element.id = id;
 		element.className = 'blip';
-		element.innerHTML = '<strong>' + id + '</strong> <em>by ' + by + '</em><p id="contents-' + id + '">' + text + '</p><p id="reply-' + id + '"><a href="#" onclick="reply_to(\'' + id + '\');return false;">reply</a></p>';
+		element.innerHTML = '<strong>' + id + '</strong> <em>by ' + by + '</em><div id="contents-' + id + '">' + text + '</div><p id="reply-' + id + '"><a href="#" onclick="reply_to(\'' + id + '\');return false;">reply</a></p>';
 		
 		if (parent == undefined) {
 			contents.appendChild(element);
