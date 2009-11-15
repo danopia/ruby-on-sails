@@ -1,6 +1,9 @@
 require 'pp'
 require 'sails'
 
+puts "Connecting to the database"
+Sails::Database.connect
+
 module Sails
 
 class RackAdapter
@@ -62,27 +65,13 @@ class RackAdapter
 										'undefined'
 									end
 									
-									authors = blip.authors.map do |author|
-										user, domain = author.split('@', 2)
-										if domain.downcase == @remote.provider.domain
-											#account = User
-											"<img src=\"/images/icons/ruby_go.png\" /> <a href=\"/users/#{user}\">#{user}</a>"
-										else
-											"<img src=\"/images/icons/ruby_go.png\" /> #{author}"
-										end
-									end
+									authors = blip.authors.map {|author| user_html(author) }
 									
 									body << "update_blip('#{blip.name}', #{parent}, '#{authors.join(', ')}', \"#{escape_js blip.to_xml}\");"
 								end # unless
 							elsif operation.is_a? Operations::AddUser
 								operation.who.each do |who|
-									user, domain = who.split('@', 2)
-									body << if (domain||'').downcase == @remote.provider.domain
-										#account = User
-										"add_user('#{who}', '<img src=\"/images/icons/ruby_go.png\" /> <a href=\"/users/#{user}\">#{user}</a>');"
-									else
-										"add_user('#{who}', '<img src=\"/images/icons/ruby_go.png\" /> #{who}');"
-									end
+									body << user_html(who)
 								end # each
 							end # if
 						end # each
@@ -109,6 +98,20 @@ class RackAdapter
 			end # timer block
 		
 		end # def call
+		
+		def user_html address
+			user, domain = address.split '@', 2
+			if domain.downcase == @remote.provider.domain
+				account = User.find_by_login user
+				unless account
+					return "<img src=\"/images/icons/ruby_go.png\" /> <a href=\"/users/#{user}\">#{user}</a>"
+				end
+				
+				"<img src=\"#{account.gravatar 25}\" /> <a href=\"/users/#{user}\">#{account.public_name}</a>"
+			else
+				"<img src=\"/images/icons/ruby_go.png\" /> #{author}"
+			end
+		end
 
   	[-1, {}, []]
   end
