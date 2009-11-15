@@ -1,9 +1,10 @@
 require 'rubygems'
 require 'active_record'
 require 'yaml'
-require 'authlogic'
+#require 'authlogic'
+#require 'models/user'
 
-require 'models/user'
+puts 'hi'
 
 module Sails
 
@@ -15,6 +16,9 @@ class Database
 		dbconfig['database'] = 'rails/' + dbconfig['database'] if dbconfig['adapter'] == 'sqlite'
 
 		ActiveRecord::Base.establish_connection dbconfig
+		
+		require 'authlogic'
+		require 'models/user'
 	end
 	
 end # class

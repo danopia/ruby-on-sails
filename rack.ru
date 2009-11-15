@@ -2,7 +2,7 @@ require 'pp'
 require 'sails'
 
 puts "Connecting to the database"
-Sails::Database.connect
+#Sails::Database.connect
 
 module Sails
 
@@ -71,7 +71,11 @@ class RackAdapter
 								end # unless
 							elsif operation.is_a? Operations::AddUser
 								operation.who.each do |who|
-									body << user_html(who)
+									body << "add_user('#{who}', '#{user_html(who)}');"
+								end # each
+							elsif operation.is_a? Operations::RemoveUser
+								operation.who.each do |who|
+									body << "remove_user('#{who}');"
 								end # each
 							end # if
 						end # each
@@ -109,7 +113,7 @@ class RackAdapter
 				
 				"<img src=\"#{account.gravatar 25}\" /> <a href=\"/users/#{user}\">#{account.public_name}</a>"
 			else
-				"<img src=\"/images/icons/ruby_go.png\" /> #{author}"
+				"<img src=\"/images/icons/ruby_go.png\" /> #{address}"
 			end
 		end
 

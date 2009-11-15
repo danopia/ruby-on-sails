@@ -1,4 +1,4 @@
-<h2><%= @address %>'s waves</h2>
+<h2><%=image_tag current_user.gravatar(40) %> <%=link_to h(current_user.public_name), current_user %>'s waves</h2>
 
 <%=link_to 'New wave', wave_path('new') %>
 
