@@ -5,7 +5,7 @@ module Sails
 # back, version by version, to HEAD. At any step, you can grab participants,
 # XML representation, etc.
 class Playback
-	attr_accessor :wave, :version, :participants, :blips, :conv
+	attr_accessor :wave, :version, :participants, :thread, :conv, :blips
 	
 	# Creates a new Playback instance for a wave. Without a version param, it
 	# defaults to starting at version 0. This is useful for playing through a
@@ -15,17 +15,26 @@ class Playback
 		@wave = wave
 		@version = 0
 		@participants = []
-		@blips = []
-		@blips2 = []
 		@conv = []
+		@blips = {}
 		
 		self.apply version if version != 0
+	end
+	
+	def thread
+		@conv.first
 	end
 	
 	# Returns true if this Playback instance is at the latest version of the
 	# wave.
 	def at_newest?
 		@version == @wave.newest_version
+	end
+	
+	def has_user? address
+		@participants.select do |user|
+			user.to_s == address.to_s.downcase
+		end.any?
 	end
 	
 	# Applies the specified delta, including any before it if necesary. Shortcuts
@@ -61,20 +70,27 @@ class Playback
 		
 		delta.operations.each do |op|
 			if op.is_a? Operations::AddUser
-				@participants += op.who
-				pp op.who
+				@participants += op.who.map do |user|
+					@wave.provider.find_or_create_user user
+				end
 			end
-			@participants -= op.who if op.is_a? Operations::RemoveUser
+			
+			if op.is_a? Operations::RemoveUser
+				@participants.delete_if do |user|
+					op.who.include? user.to_s
+				end
+			end
+			
 			if op.is_a? Operations::Mutate
 				puts "Mutation to #{op.document_id}"
 				if op.document_id == 'conversation'
-					self.apply_conv_mutate(op.components)
+					apply_conv_mutate op.components
 				else
 					if op.components.any?
-						self.blip(op.document_id).apply_mutate(delta.author, op.components) 
+						@blips[op.document_id].apply_mutate delta.author, op.components
 					else
+						@blips[op.document_id] = Blip.new op.document_id
 						puts "New blip #{op.document_id}"
-						@blips2 << Blip.new(op.document_id)
 					end
 				end
 			end
@@ -84,77 +100,62 @@ class Playback
 	end
 	
 	# Look up a blip or create it
-	def [] blip_id
-		blips = @blips2.flatten.select {|blip| blip.name == blip_id}
+	def [](blip_id)
+		blips = @thread.flatten.select {|blip| blip.name == blip_id}
 		return blips.first if blips.any?
 		
 		Blip.new blip_id
 	end
 	alias blip []
 	
-	def parent blip
-		blip find(blip.name, @blips)
-	end
-	
-	def find needle, haystack
-		haystack.each do |item|
-			if item.is_a? Array
-				result = find(needle, item)
-				if result == true
-					return haystack[haystack.index(item) - 1]
-				elsif result
-					return result
-				end
-			elsif item == needle
-				return true
-			end
-		end
-		nil
-	end
-	
 	protected
 	
 	# Apply a mutation. Does NO version checking!
 	def apply_conv_mutate(operations)
-		item = 0 # in the 'conv' array
+		index = 0
+		stack = []
+		
 		operations.compact.each do |component|
 			if component[:retain_item_count]
-				item += component[:retain_item_count]
+				component[:retain_item_count].times do
+					if @conv[index] == :end
+						stack.pop
+					else
+						stack << @conv[index]
+					end
+					index += 1
+				end
 			
 			elsif component[:element_start]
-				element = Element.new(component[:element_start][:type])
+				
+				attributes = {}
 				(component[:element_start][:attributes] || []).each do |attribute|
-					element[attribute[:key]] = attribute[:value]
+					attributes[attribute[:key]] = attribute[:value]
 				end
 				
-				@conv.insert(item, element)
-				item += 1
+				item = nil
+				case component[:element_start][:type]
+					when 'conversation': item = Thread.new; @thread = item
+					when 'blip': item = @blips[attributes['id']]
+					when 'thread': item = Thread.new(stack.last, attributes['id'])
+				end
+				
+				raise "wth is #{component[:element_start][:type]}" unless item
+				
+				item.parent = stack.last || self
+				stack.last << item if stack.last
+				stack << item
+				
+				@conv.insert index, item
+				index += 1
 			
 			elsif component[:element_end]
-				@conv.insert(item, :end)
-				item += 1
+				@conv.insert index, :end
+				stack.pop
+				index += 1
+			
 			end
 		end
-		
-		read_conv
-	end
-	
-	def read_conv
-		p @conv
-		stack = [[]]
-		
-		@conv.each do |item|
-			if item.is_a? Element
-				next if item.type == 'conversation'
-				stack.last << item['id']
-				stack.push []
-			elsif item == :end && stack.size >= 2
-				arr = stack.pop
-				stack.last << arr if arr.any?
-			end
-		end
-		
-		@blips = stack
 	end
 	
 end # class

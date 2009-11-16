@@ -230,6 +230,17 @@ class Provider
 			Server.new self, name
 		end
 	end
+	
+	def find_or_create_user address
+		return address if address.is_a? WaveUser
+		
+		username, domain = address.downcase.split '@', 2
+
+		server = find_or_create_server domain
+		
+		return server.users[username] if server.users[username]
+		WaveUser.new self, address
+	end
 end # class
 
 end # module

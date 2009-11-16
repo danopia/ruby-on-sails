@@ -1,5 +1,7 @@
 
-module Sails::Operations
+module Sails
+
+module Operations
 
 class Operation
 end
@@ -29,7 +31,7 @@ end
 class AddUser < UserOperation
 	# Create a hash, for use in ProtoBuffer encoding methods.
 	def to_hash
-		{:added => @who.map{|who|who.downcase}}
+		{:added => @who.map{|who|who.to_s.downcase}}
 	end
 	
 	# Human-readable string; i.e. "Added me@danopia.net to the wave"
@@ -88,6 +90,8 @@ class Mutate < Operation
 		components.select {|item| item.is_a? String}.join(' ')
 	end
 end
+
+end # module
 
 end # module
 

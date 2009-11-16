@@ -4,7 +4,7 @@ module Sails
 # Represents a certain version of a Blip at a certain point in time. Playback
 # creates instances of this class for you. Mainly is a list of contents.
 class Blip
-	attr_accessor :name, :authors, :last_changed, :contents, :special, :annotations
+	attr_accessor :name, :authors, :last_changed, :contents, :special, :annotations, :parent, :threads
 	
 	def initialize name
 		@name = name
@@ -12,24 +12,37 @@ class Blip
 		@contents = ''
 		@special = []
 		@annotations = []
+		@threads = []
 	end
 	
-	# Hackity hack
-	def create_fedone_line(author, text)
-		arr = [
-			{:element_start=>
-				{:type=>"line",
-				 :attributes=>
-					[{:value=>author, :key=>"by"}]}},
-			{:element_end=>true},
-			{:characters=>text}]
-			
-		arr.insert(0, {:retain_item_count=>item_count}) if @contents.size > 0
-		arr
+	def parent_blip
+		return nil unless @parent
+		return nil unless @parent.parent.is_a? Blip
+		@parent.parent
 	end
 	
 	def digest
 		@contents.gsub("\001", '')
+	end
+	
+	def << thread
+		@threads << thread
+	end
+	
+	def children
+		kids = []
+		threads.each do |thread|
+			kids += thread.to_arr
+		end
+		kids
+	end
+	
+	def flatten
+		kids = []
+		threads.each do |thread|
+			kids += thread.flatten
+		end
+		kids
 	end
 	
 	# Dumps the current version of this Blip instance to XML. Note that said

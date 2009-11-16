@@ -1,10 +1,6 @@
 require 'rubygems'
 require 'active_record'
 require 'yaml'
-#require 'authlogic'
-#require 'models/user'
-
-puts 'hi'
 
 module Sails
 

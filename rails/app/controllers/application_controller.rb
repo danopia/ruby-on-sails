@@ -67,5 +67,6 @@ class ApplicationController < ActionController::Base
 		@remote = Sails::Remote.connect unless @remote
 		
 		@address = "#{current_user.login}@#{@remote.provider.domain}" rescue nil
+		@user = @remote.provider.find_or_create_user @address if @address
 	end
 end

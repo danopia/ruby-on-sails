@@ -46,36 +46,28 @@ class RackAdapter
 						delta = @wave[version + 1]
 						version = delta.version
 						
-						#body = @wave.blips.map do |blip|
-						#	if blip.is_a? String
-						#		"<p><strong>#{blip}</strong></p>\n<p><em>by #{@wave.blip(blip).authors.join(', ')}</em></p>\n#{@wave.blip(blip).to_xml}\n<hr/>"
-						#	else
-						#		"<blockquote>\n#{render_html blip}\n</blockquote>"
-						#	end
-						#end.join("\n")
-						
 						delta.operations.each do |operation|
 							if operation.is_a? Operations::Mutate
 								unless operation.document_id == 'conversation'
-									blip = @wave.blip operation.document_id
-									parent = @wave.parent(blip)
-									parent = if parent && parent.name.is_a?(String)
+									blip = @wave.blips[operation.document_id]
+									parent = blip.parent_blip
+									parent = if parent
 										"'#{parent.name}'"
 									else
 										'undefined'
 									end
 									
-									authors = blip.authors.map {|author| user_html(author) }
+									authors = blip.authors.map {|author| author.to_html }
 									
 									body << "update_blip('#{blip.name}', #{parent}, '#{authors.join(', ')}', \"#{escape_js blip.to_xml}\");"
 								end # unless
-							elsif operation.is_a? Operations::AddUser
-								operation.who.each do |who|
-									body << "add_user('#{who}', '#{user_html(who)}');"
-								end # each
 							elsif operation.is_a? Operations::RemoveUser
 								operation.who.each do |who|
 									body << "remove_user('#{who}');"
+								end # each
+							else#if operation.is_a? Operations::AddUser
+								operation.who.each do |who|
+									body << "add_user('#{who}', '#{who.to_html}');"
 								end # each
 							end # if
 						end # each
@@ -101,24 +93,10 @@ class RackAdapter
 				
 			end # timer block
 		
-		end # def call
-		
-		def user_html address
-			user, domain = address.split '@', 2
-			if domain.downcase == @remote.provider.domain
-				account = User.find_by_login user
-				unless account
-					return "<img src=\"/images/icons/ruby_go.png\" /> <a href=\"/users/#{user}\">#{user}</a>"
-				end
-				
-				"<img src=\"#{account.gravatar 25}\" /> <a href=\"/users/#{user}\">#{account.public_name}</a>"
-			else
-				"<img src=\"/images/icons/ruby_go.png\" /> #{address}"
-			end
-		end
+		end # on elapsed
 
   	[-1, {}, []]
-  end
+  end # def call
   
 #	data = "<script type=\"text/javascript\">
 #	document.getElementById('data').innerHTML = \"#{escape_js wave.to_xml}\";

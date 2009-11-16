@@ -1,3 +1,4 @@
 rails/db/*.sqlite3
 rails/log
 doc
+geany_run_script.sh

@@ -15,7 +15,7 @@ class Delta < BaseDelta
 	# version=. You should also try to set the time, if you can get it.
 	def initialize wave, author=nil
 		@wave = wave
-		@author = author
+		self.author = author
 		@version = wave.newest_version
 		@time = Time.now.to_i * 1000
 		@commited = false
@@ -36,6 +36,13 @@ class Delta < BaseDelta
 	
 	def local?
 		@server == @wave.provider.local
+	end
+	
+	def author=(author)
+		author = "#{author.login}@#{@wave.provider.domain}" if author.is_a? User
+		author = @wave.provider.find_or_create_user author unless author.is_a? WaveUser
+		
+		@author = author
 	end
 	
 	# Parses an incoming delta, taking the wavelet name (from the XML attribute)
@@ -105,7 +112,7 @@ class Delta < BaseDelta
 	end
 	
 	# Add an operation to the delta.
-	def <<(operation)
+	def << operation
 		@operations << operation
 		@version += 1
 	end
@@ -115,7 +122,7 @@ class Delta < BaseDelta
 	def delta_data
 		hash = {
 			:applied_to => prev_version,
-			:author => @author.downcase}
+			:author => @author.to_s}
 		hash[:operations] = @operations.map{|op|op.to_hash} if @operations.any?
 		hash
 	end
@@ -166,12 +173,6 @@ class Delta < BaseDelta
 	# Get an "applied delta", ready to send out to slave servers.
 	def to_applied
 		return @to_applied if @to_applied && @frozen
-		pp({
-			:signed_delta => to_s,
-			:applied_to => prev_version,
-			:operations_applied => @operations.size, # operations applied
-			:timestamp => @time#.to_i * 1000 # milliseconds not needed yet
-		})
 		@to_applied = Sails::ProtoBuffer.encode(:applied_delta, {
 			:signed_delta => to_s,
 			:applied_to => prev_version,
@@ -202,7 +203,6 @@ class Delta < BaseDelta
 		@hash = nil
 		@to_s = nil
 		@to_applied = nil
-		#@signature = nil
 	end
 	
 	alias commited? commited
@@ -228,17 +228,17 @@ class Delta < BaseDelta
 			# Make a list of servers to send to
 			targets = []
 			people.each do |person|
-				person =~ /^.+@(.+)$/
+				person.to_s =~ /^.+@(.+)$/
 				targets << $1 if $1
 			end
 			targets.uniq!
 			
-			# Don't send back to ourselfs
+			# Don't send back to ourself
 			targets.delete @wave.provider.domain
 			
 			unless targets.empty?
 			
-				packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(self.to_applied)}]]></applied-delta></wavelet-update></item></items></event>"
+				packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(to_applied)}]]></applied-delta></wavelet-update></item></items></event>"
 				
 				puts "Sending to #{targets.join(', ')}"
 				

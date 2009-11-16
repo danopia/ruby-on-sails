@@ -1,5 +1,8 @@
 <h2>Login to Sails</h2>
 
+<p class="notice box">Please note that in the switch to MySQL, the users table
+  has been cleared. You probably will have to re-register.</p>
+
 <% form_for @user_session, :url => login_path do |f| %>
   <%= f.error_messages %>
   <%= f.label :login %><br />

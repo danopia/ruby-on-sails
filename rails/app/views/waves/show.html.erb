@@ -1,4 +1,4 @@
-<h2>Wave: <%=h @wave.name %> (from <%=h @wave.server || (@remote.provider.local).domain %>)</h2>
+<h2>Wave: <%=h @wave.name %> (from <%=h @wave.server.domain || (@remote.provider.local).domain %>)</h2>
 
 <% unless @wave.complete? -%>
 <div class="error box">This wave currently has incomplete data. <%= @wave.complete? %></div>
@@ -126,12 +126,3 @@ function remove_user(address) {
 }
 
 </script>
-
-<style>
-.blip {
-	border: 2px solid #eee;
-	-moz-border-radius: 5px;
-	padding: 1em 1em 0 1em;
-	margin-bottom: 1em;
-}
-</style>

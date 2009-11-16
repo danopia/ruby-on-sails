@@ -1,4 +1,4 @@
-<h2><%=image_tag current_user.gravatar(40) %> <%=link_to h(current_user.public_name), current_user %>'s waves</h2>
+<h2><%=image_tag current_user.gravatar(45) %> <%=link_to h(current_user.public_name), current_user %>'s waves</h2>
 
 <%=link_to 'New wave', wave_path('new') %>
 
@@ -10,9 +10,12 @@
 <h3><%=link_to wave.name, domain_wave_path(wave.name, wave.server.name) %></h3>
 <% end -%>
 
-<p><em>Participants:</em> <%=h wave.participants.join(', ') %></p>
-<% wave.blips.flatten.each do |blip| %>
-<p><em><%=h blip %>:</em> <%=h wave.blip(blip).contents.gsub("\001", ' ') %></p>
-<% end %>
+<p>
+<% wave.participants.each do |user| -%>
+<img src="<%=user.gravatar 45 %>" alt="<%=user.to_s %>" title="<%=user.display_name %>" />
+<% end -%>
+</p>
+
+<p><%=h wave.blips.flatten.map {|blip| wave.blip(blip).digest }.join("\n") %></p>
 
 <% end -%>

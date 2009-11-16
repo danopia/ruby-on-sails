@@ -15,7 +15,7 @@ class DeltaBuilder
 	
 	def author= author
 		@delta.author = author
-		@author = author
+		@author = @delta.author
 	end
 	
 	def create_conv
@@ -105,10 +105,10 @@ class DeltaBuilder
 	end
 	
 	def add_user participant
-		add Operations::AddUser.new(participant)
+		add Operations::AddUser.new(@wave.provider.find_or_create_user(participant))
 	end
 	def remove_user participant
-		add Operations::RemoveUser.new(participant)
+		add Operations::RemoveUser.new(@wave.provider.find_or_create_user(participant))
 	end
 	def mutate blip, components=[]
 		blip = blip.name if blip.is_a? Sails::Blip

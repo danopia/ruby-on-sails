@@ -4,7 +4,7 @@ module Sails
 # Represents a server, remote or local, and tracks certificates, waves, and the
 # queue of packets to send to a server once a connection is established.
 class Server
-	attr_accessor :provider, :certificates, :certificate_hash, :domain, :name, :waves, :queue, :state
+	attr_accessor :provider, :certificates, :certificate_hash, :domain, :name, :waves, :queue, :state, :users
 	
 	# Create a new server.
 	def initialize(provider, domain, name=nil, init=true)
@@ -12,6 +12,7 @@ class Server
 		@domain = domain
 		@name = name || domain
 		@waves = {}
+		@users = {}
 		@queue = []
 		@state = :uninited
 		@certificates = []
@@ -76,6 +77,9 @@ class Server
 			
 		elsif item.is_a? Wave
 			@waves[item.name] = item
+			
+		elsif item.is_a? WaveUser
+			@users[item.username] = item
 			
 		else
 			raise ArgumentError, 'expected an Array (packet) or Wave'

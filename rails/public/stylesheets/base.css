@@ -1,13 +1,18 @@
-body { background-color: #eee; color: #333; margin: 0 0 0 0; }
+body {
+	background-color: #eee;
+	color: #333;
+	margin: 0 0 0 0;
+}
 
 body, p, ol, ul {
-  font-family: verdana, arial, helvetica, sans-serif;
-  font-size:   13px;
-  line-height: 18px;
+	font-family: verdana, arial, helvetica, sans-serif;
+	font-size:   13px;
+	line-height: 18px;
 }
 
 #header {
 	width: 100%;
+	background-color: #fff;
 }
 
 #footer {
@@ -36,6 +41,13 @@ span.blinkybit {
 	padding: 0 0.3em;
 	margin: 0 0.3em;
 	color: white;
+}
+
+.blip {
+	border: 2px solid #eee;
+	-moz-border-radius: 5px;
+	padding: 1em 1em 0 1em;
+	margin-bottom: 1em;
 }
 
 .box {
@@ -110,8 +122,9 @@ a:hover { color: #fff; background-color:#000; }
 }
 
 
-h1 {
-	margin: 0.3em 1em;
+#header h1 {
+	padding: 0.3em 1em;
+	margin: 0;
 }
 
 #header ul

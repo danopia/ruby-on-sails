@@ -24,19 +24,11 @@ class WavesController < ApplicationController
 			return
 		end
 		
-		unless @wave.participants.include? @address
+		unless @wave.has_user? @address
 			Sails::DeltaBuilder.build @wave, @address do
 				add_self
 			end
     end
-    
-		@html = @wave.blips.map do |blip|
-			if blip.is_a? String
-				"<p><strong>#{blip}</strong></p>\n<p><em>by #{@wave.blip(blip).authors.join(', ')}</em></p>\n#{@wave.blip(blip).to_xml}\n<hr/>"
-			else
-				"<blockquote>\n#{render_html blip}\n</blockquote>"
-			end
-		end.join("\n")
 
   end
   
@@ -68,7 +60,7 @@ class WavesController < ApplicationController
 			return
 		end
 		
-		if @wave.participants.include? @address
+		if @wave.has_user? @address
 		
 			Sails::DeltaBuilder.build @wave, @address do |builder|
 				blip = builder.new_blip
@@ -98,9 +90,9 @@ class WavesController < ApplicationController
   def remove
 		@wave = @remote[params[:id]]
 		
-		if !@wave.participants.include? @address
+		if !@wave.has_user? @address
     	flash[:error] = 'fail.'
-		elsif !( params[:who] && @wave.participants.include?(params[:who]) )
+		elsif !( params[:who] && @wave.has_user?(params[:who]) )
     	flash[:error] = "#{params[:who]} isn't in this wave."
     else
 			Sails::DeltaBuilder.build @wave, @address do |builder|
@@ -115,9 +107,9 @@ class WavesController < ApplicationController
   def add
 		@wave = @remote[params[:id]]
 		
-		if !@wave.participants.include? @address
+		if !@wave.has_user? @address
     	flash[:error] = 'fail.'
-		elsif !params[:who] || @wave.participants.include?(params[:who])
+		elsif !params[:who] || @wave.has_user?(params[:who])
     	flash[:error] = "#{params[:who]} is already in this wave."
     else
 			Sails::DeltaBuilder.build @wave, @address do |builder|
