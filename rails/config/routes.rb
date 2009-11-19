@@ -1,4 +1,7 @@
 ActionController::Routing::Routes.draw do |map|
+	map.group_add_member 'groups/:id/add', :controller => 'groups', :action => 'add_member'
+  map.resources :groups
+
   # The priority is based upon order of creation: first created -> highest priority.
 
 	#map.domain_wave 'waves/:domain/:id', :controller => 'waves', :action => 'show'

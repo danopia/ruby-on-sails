@@ -1,0 +1,38 @@
+<h2>Group - <%=h @group.title %></h2>
+
+<p>
+  <b>Owner:</b>
+  <%= @group.user.to_html %>
+</p>
+
+<p>
+  <b>Address:</b>
+  <%=h @group.address %><span style="color: gray;">@<%=h Sails::Remote.provider.domain %></span>
+</p>
+
+<p>
+  <b>Public:</b>
+  <%=h @group.public ? 'yes' : 'no' %>
+</p>
+
+<p>
+  <%=h @group.description %>
+</p>
+
+<h3>Members</h3>
+
+<ul class="userlist">
+<% @group.users.each do |member| -%>
+  <li><%=member.to_html %></li>
+<% end -%>
+</ul>
+
+<% if @group.user == current_user -%>
+
+<%= form_tag group_add_member_path(@group) %>
+<%= text_field_tag :username %><span style="color: gray;">@<%=h Sails::Remote.provider.domain %></span> <%= submit_tag 'Add member' %>
+</form>
+
+<%= link_to 'Edit', edit_group_path(@group) %> |
+<% end -%>
+<%= link_to 'Back', groups_path %>

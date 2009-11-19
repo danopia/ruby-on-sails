@@ -1,0 +1,27 @@
+<h2>New group</h2>
+
+<% form_for(@group) do |f| %>
+  <%= f.error_messages %>
+
+  <p>
+    <%= f.label :address %><br />
+    <%= f.text_field :address %>@<%=h Sails::Remote.provider.domain %>
+  </p>
+  <p>
+    <%= f.label :title, 'Name' %><br />
+    <%= f.text_field :title %>
+  </p>
+  <p>
+    <%= f.label :description %><br />
+    <%= f.text_area :description %>
+  </p>
+  <p>
+    <%= f.label :public %> (only affects users of this Sails server)<br />
+    <%= f.check_box :public %>
+  </p>
+  <p>
+    <%= f.submit 'Create' %>
+  </p>
+<% end %>
+
+<%= link_to 'Cancel', groups_path %>

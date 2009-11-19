@@ -67,7 +67,9 @@ class RackAdapter
 								end # each
 							else#if operation.is_a? Operations::AddUser
 								operation.who.each do |who|
-									body << "add_user('#{who}', '#{who.to_html}');"
+									html = who.to_s
+									html = who.to_html if who.respond_to? :to_html
+									body << "add_user('#{who}', '#{html}');"
 								end # each
 							end # if
 						end # each

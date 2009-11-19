@@ -17,6 +17,7 @@ class Thread < Array
 	def flatten
 		kids = []
 		self.each do |blip|
+			kids << blip
 			kids += blip.flatten
 		end
 		kids

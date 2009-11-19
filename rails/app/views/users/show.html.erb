@@ -14,13 +14,19 @@
 
 <p>
   <b>Wave address:</b>
-  <%=h @user.login %>@<%=h @remote.provider.domain %>
+  <%=h @user.login %><span style="color: gray;">@<%=h Sails::Remote.provider.domain %></span>
 </p>
 
 <p>
   <b>Email address:</b>
   <%=mail_to @user.email %>
 </p>
+
+<p>
+
+<% @user.groups.each do |group| -%>
+<p><%=h group.title %></p>
+<% end -%>
 
 <br clear="both"/>
 

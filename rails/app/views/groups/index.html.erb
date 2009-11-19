@@ -1,0 +1,27 @@
+<h2>Your groups</h2>
+
+<table>
+  <tr>
+    <th>Owner</th>
+    <th>Address</th>
+    <th>Name</th>
+    <th>Members</th>
+    <th>Public</th>
+  </tr>
+
+<% @groups.each do |group| %>
+  <tr>
+    <td><%=group.user.to_html %></td>
+    <td><%=h group.address %><span style="color: gray;">@<%=h Sails::Remote.provider.domain %></span></td>
+    <td><%= link_to h(group.title), group %></td>
+    <td><%=h group.users.size %></td>
+    <td><%=h group.public ? 'yes' : 'no' %></td>
+    <td><%= link_to 'Edit', edit_group_path(group) %></td>
+    <td><%= link_to 'Destroy', group, :confirm => 'Are you sure?', :method => :delete %></td>
+  </tr>
+<% end %>
+</table>
+
+<br />
+
+<%= link_to 'New group', new_group_path %>

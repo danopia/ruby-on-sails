@@ -29,6 +29,10 @@ h3 img {
 	padding: 0 0.2em 0 0;
 }
 
+.userlist {
+	list-style: none;
+}
+
 #content {
 	padding: 1em;
 	background-color: #fff;

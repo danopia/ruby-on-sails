@@ -10,12 +10,15 @@
 <h3><%=link_to wave.name, domain_wave_path(wave.name, wave.server.name) %></h3>
 <% end -%>
 
-<p>
 <% wave.participants.each do |user| -%>
-<img src="<%=user.gravatar 45 %>" alt="<%=user.to_s %>" title="<%=user.display_name %>" />
+<div style="float:left; padding: 2px;">
+<img src="<%=user.gravatar 45 %>" alt="<%= user.to_s %>" title="<%= user.display_name %>" />
+<br /><%= user.to_html nil %>
+</div>
 <% end -%>
-</p>
 
-<p><%=h wave.blips.flatten.map {|blip| wave.blip(blip).digest }.join("\n") %></p>
+<br clear="left" />
+
+<p><%=h wave.thread.flatten.map {|blip| blip.digest }.join("\n") %></p>
 
 <% end -%>

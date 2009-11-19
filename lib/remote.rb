@@ -9,17 +9,26 @@ module Sails
 class Remote
 	attr_accessor :drb, :provider
 	
+	class << self
+		attr_reader :provider, :remote # Current remote/provider
+	end
+	
 	# Serve a remote up
 	def self.serve provider, host=':9000'
-		remote = Sails::Remote.new provider
-		remote.drb = DRb.start_service "druby://#{host}", remote
-		remote
+		@remote = Sails::Remote.new provider
+		@remote.drb = DRb.start_service "druby://#{host}", @remote
+		
+		@provider = provider
+		@remote
 	end
 	
 	# Connect to a remote
 	def self.connect host=':9000'
 		DRb.start_service
-		DRbObject.new nil, "druby://#{host}"
+		@remote = DRbObject.new nil, "druby://#{host}"
+		
+		@provider = @remote.provider
+		@remote
 	end
 	
 	# Create a remote for the provider

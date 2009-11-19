@@ -44,10 +44,13 @@ class WaveUser
 	end
 	
 	def to_html size=25
+		img = ''
+		img = "<img src=\"#{gravatar size}\" /> " unless size.nil?
+		
 		if local?
-			"<img src=\"#{gravatar size}\" /> <a href=\"/users/#{username}\">#{display_name}</a>"
+			"#{img}<a href=\"/users/#{username}\">#{display_name}</a>"
 		else
-			"<img src=\"#{gravatar size}\" /> #{address}"
+			"#{img}#{address}"
 		end
 	end
 
