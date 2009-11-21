@@ -3,6 +3,8 @@ module Sails
 
 # Variation of Hash with a degree of case-insensitive keys.
 class ServerList < Hash
+	attr_accessor :provider
+	
 	def [](server)
 		return nil unless server
 		super server.downcase
@@ -23,7 +25,13 @@ class ServerList < Hash
 	end
 	
 	def by_signer_id hash
-		values.select{|server| server.certificate_hash == hash}.first
+		server = values.find{|server| server.certificate_hash == hash}
+		return server if server
+		
+		record = ::Server.find_by_signer_id Utils.encode64(hash)
+		server = Server.new @provider, record.domain if record
+		
+		server
 	end
 end
 
@@ -38,10 +46,12 @@ class Provider
 
 		@domain = domain
 		@name = "#{subdomain}#{domain}"
-		@servers = ServerList.new self
+		@servers = ServerList.new
 		@sock = sock
 		@packet_ids = {}
 		@ready = false
+		
+		@servers.provider = self
 
 		@local = Server.new self, @domain, @name, false
 		@local.state = :local

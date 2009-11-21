@@ -18,19 +18,24 @@ ActiveRecord::Schema.define(:version => 2) do
   end
 
   create_table "deltas", :force => true do |t|
-    t.integer  "wave_id",    :null => false
+    t.integer  "wave_id",      :null => false
     t.integer  "server_id"
     t.integer  "user_id"
-    t.string   "author",     :null => false
-    t.string   "signer_id",  :null => false
+    t.integer  "applied_at"
+    t.integer  "applied_to"
+    t.integer  "version"
+    t.string   "author"
+    t.string   "signer_id"
     t.string   "raw"
     t.string   "signature"
+    t.string   "current_hash"
     t.datetime "created_at"
     t.datetime "updated_at"
   end
 
   create_table "groups", :force => true do |t|
     t.integer "user_id"
+    t.integer "user_count"
     t.string  "address",     :null => false
     t.string  "title",       :null => false
     t.text    "description"

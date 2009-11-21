@@ -5,12 +5,11 @@ require 'pp'
 require 'yaml'
 
 require 'sails'
-include Sails
 
 require 'agents/echoey'
 
 puts "Connecting to the database"
-Sails::Database.connect
+Sails::Utils.connect_db
 
 puts "Loading config"
 begin
@@ -18,7 +17,7 @@ begin
 rescue
 	raise Sails::ProviderError, 'Could not read the sails.conf file. Make sure it exists and is proper YAML.'
 end
-provider = Provider.new config['domain-name'], config['service-name']
+provider = Sails::Provider.new config['domain-name'], config['service-name']
 
 begin
 	provider.connect_sock config['xmpp-connect-host'], config['xmpp-connect-port'].to_i
@@ -35,7 +34,7 @@ end
 
 if config['ping']
 	puts "Sending a ping to #{config['ping']} due to configoration."
-	provider << Server.new(provider, config['ping'], config['ping'])
+	provider << Sails::Server.new(provider, config['ping'], config['ping'])
 end
 
 provider.send_data '<stream:stream xmlns="jabber:component:accept" xmlns:stream="http://etherx.jabber.org/streams" to="' + provider.name + '">'
@@ -50,7 +49,7 @@ unless id
 		when nil: 'Unable to connect to XMPP. The server denied the component for an unknown reason.'
 		else; "Unable to connect to XMPP: #{error}"
 	end
-	raise ProviderError, message
+	raise Sails::ProviderError, message
 end
 
 key = Digest::SHA1.hexdigest(id + config['xmpp-password'])
@@ -113,8 +112,8 @@ until provider.sock.closed?
 						until version > node['end-version'].to_i
 							delta = wave[version]
 							version = delta.version
-							if delta.is_a? Delta
-								payload << "<item><applied-delta xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><![CDATA[#{encode64 delta.to_applied}]]></applied-delta></item>"
+							if delta.is_a? Sails::Delta
+								payload << "<item><applied-delta xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\"><![CDATA[#{Sails::Utils.encode64 delta.to_applied}]]></applied-delta></item>"
 							end
 							version += 1
 						end
@@ -132,7 +131,7 @@ until provider.sock.closed?
 					
 					node = (packet/'pubsub/items/signer-request').first
 					hash = decode64 node['signer-id']
-					server = provider.servers.by_signer_id  hash
+					server = provider.servers.by_signer_id hash
 
 					if server
 						puts "Sending a cert to #{from} on request, for #{server.domain}"
@@ -160,7 +159,7 @@ until provider.sock.closed?
 					
 					provider.remote.all_waves.each do |wave|
 						wave.deltas.each_value do |delta|
-							next unless delta.is_a? Delta
+							next unless delta.is_a? Sails::Delta
 							next unless delta.signer_id == server.certificate_hash
 							next if delta.server == server
 							delta.server = server
@@ -174,9 +173,9 @@ until provider.sock.closed?
 					puts "Publish request from #{from} for one of my waves"
 					node = (packet/'publish/item/submit-request/delta').first
 					p decode64(node.inner_text)
-					delta = Delta.parse(provider, node['wavelet-name'], decode64(node.inner_text))
+					delta = Sails::Delta.parse(provider, node['wavelet-name'], Sails::Utils.decode64(node.inner_text))
 					
-					provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish><item><submit-response xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" application-timestamp=\"#{delta.time}\" operations-applied=\"#{delta.operations.size}\"><hashed-version history-hash=\"#{encode64 delta.hash}\" version=\"#{delta.version}\"/></submit-response></item></publish></pubsub>"
+					provider.send_xml 'iq', id, from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish><item><submit-response xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" application-timestamp=\"#{delta.time}\" operations-applied=\"#{delta.operations.size}\"><hashed-version history-hash=\"#{Sails::Utils.encode64 delta.hash}\" version=\"#{delta.version}\"/></submit-response></item></publish></pubsub>"
 				end
 				
 			when [:iq, :result]
@@ -235,7 +234,7 @@ until provider.sock.closed?
 					
 					provider.remote.all_waves.each do |wave|
 						wave.deltas.each_value do |delta|
-							next unless delta.is_a? Delta
+							next unless delta.is_a? Sails::Delta
 							delta.server = server if delta.signer_id == server.certificate_hash
 							puts "Changed server for #{wave.conv_root_path} ##{delta.version}."
 						end
@@ -258,7 +257,7 @@ until provider.sock.closed?
 						puts "Got history for #{wave.name}"
 						
 						(packet/'pubsub/items/item/applied-delta').each do |update|
-							delta = Delta.parse(provider, wave.conv_root_path, decode64(update.inner_text), true)
+							delta = Sails::Delta.parse(provider, wave.conv_root_path, Sails::Utils.decode64(update.inner_text), true)
 							puts "Got a delta, version #{delta.version}"
 						end
 						
@@ -293,7 +292,7 @@ until provider.sock.closed?
 							(packet/'event/items/item/wavelet-update').each do |update|
 								next unless (update/'applied-delta').any?
 								
-								delta = Delta.parse(provider, update['wavelet-name'], decode64(update.inner_text), true)
+								delta = Sails::Delta.parse(provider, update['wavelet-name'], Sails::Utils.decode64(update.inner_text), true)
 								puts "Got delta version #{delta.version rescue -1}"
 								wave = delta.wave if delta
 							end

@@ -18,6 +18,8 @@ class CreateLotsaTables < ActiveRecord::Migration
     create_table :groups do |t|
       t.references :user
       
+      t.integer    :user_count, :defualt => 0
+      
       t.string     :address,    :null => false
       t.string     :title,      :null => false
       t.text       :description
@@ -47,10 +49,14 @@ class CreateLotsaTables < ActiveRecord::Migration
       t.references :server # host, nil=local
       t.references :user # author, if local
       
-      t.string     :author,     :null => false
-      t.string     :signer_id,  :null => false
+      t.integer    :applied_at
+      t.integer    :applied_to
+      t.integer    :version
+      t.string     :author
+      t.string     :signer_id
       t.string     :raw
       t.string     :signature
+      t.string     :current_hash
 
       t.timestamps
     end

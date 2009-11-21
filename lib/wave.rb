@@ -3,7 +3,7 @@ module Sails
 
 # Represents a Wave, either local or remote.
 class Wave < Playback
-	attr_accessor :provider, :server, :name, :deltas, :boom
+	attr_accessor :provider, :server, :name, :deltas, :boom, :record
 	
 	# Create a new wave. +name+ defaults to a random value and +host+ defaults
 	# to the local provider's name.
@@ -16,6 +16,9 @@ class Wave < Playback
 			server = provider.find_or_create_server server
 		end
 		@server = server || provider.local
+		
+		@record = @server.record.waves.find_by_name @name
+		@record ||= @server.record.waves.create(:name => @name)
 		
 		super self
 		
@@ -87,7 +90,7 @@ class Wave < Playback
 		p first
 		p last
 		
-		@server << ['iq', 'get', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"#{first[0]}\" start-version-hash=\"#{encode64(first[1])}\" end-version=\"#{last[0]}\" end-version-hash=\"#{encode64(last[1])}\" wavelet-name=\"#{self.conv_root_path}\"/></items></pubsub>", "100-#{@name}"]
+		@server << ['iq', 'get', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"wavelet\"><delta-history xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" start-version=\"#{first[0]}\" start-version-hash=\"#{Utils.encode64(first[1])}\" end-version=\"#{last[0]}\" end-version-hash=\"#{Utils.encode64(last[1])}\" wavelet-name=\"#{self.conv_root_path}\"/></items></pubsub>", "100-#{@name}"]
 	end
 	
 	def request_cert delta, signer_id=nil

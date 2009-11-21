@@ -25,12 +25,30 @@ end
 
 module Sails
 
-	class Utils
+	module Utils
 	
 		# Generate a random alphanumeric string
-		def self.random_string(length=12)
+		def self.random_string length=12
 			@letters ||= ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
 			([''] * length).map { @letters[rand * @letters.size] }.join('')
+		end
+
+		# Base64-encode the data with no newlines in the output.
+		def self.encode64 data
+			Base64.encode64(data).gsub("\n", '')
+		end
+		# Base64-decode the data.
+		def self.decode64 data
+			Base64.decode64(data)
+		end
+
+		# SHA1-digest the data. Returns a byte string.
+		def self.sha1 data
+			Digest::SHA1.digest data
+		end
+		# SHA256-digest the data. Returns a byte string.
+		def self.sha2 data
+			Digest::SHA2.digest data
 		end
 	
 	end
@@ -40,29 +58,5 @@ module Sails
 	
 	# Triggered by the provider code only.
 	class ProviderError < Error; end
-
-	# Base64-encode the data with no newlines in the output.
-	def encode64 data
-		Base64.encode64(data).gsub("\n", '')
-	end
-	# Base64-decode the data.
-	def decode64 data
-		Base64.decode64(data)
-	end
-
-	# SHA1-digest the data. Returns a byte string.
-	def sha1 data
-		Digest::SHA1.digest data
-	end
-	# SHA256-digest the data. Returns a byte string.
-	def sha2 data
-		Digest::SHA2.digest data
-	end
-	
-	# Generate a random alphanumeric string
-	def random_string(length=12)
-		@letters ||= ('a'..'z').to_a + ('A'..'Z').to_a + ('0'..'9').to_a
-		([''] * length).map { @letters[rand * @letters.size] }.join('')
-	end
 
 end

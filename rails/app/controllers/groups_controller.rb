@@ -1,6 +1,6 @@
 class GroupsController < ApplicationController
 	before_filter :require_user, :except => ['index', 'show']
-	#before_filter :connect_remote
+	before_filter :connect_remote
 	
   # GET /groups
   # GET /groups.xml

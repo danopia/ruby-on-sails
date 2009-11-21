@@ -2,7 +2,7 @@ require 'pp'
 require 'sails'
 
 puts "Connecting to the database"
-#Sails::Database.connect
+#Sails::Utils.connect_db
 
 module Sails
 
@@ -12,14 +12,12 @@ class RackAdapter
 	end
 	
 	def connect
-		return if @remote
-		@remote = Remote.connect
-		DRb.start_service
+		@remote ||= Remote.connect
 	end
 	
   def call(env)
   	response = @rails.call env
-  	return response unless (200..299).include? response[0]
+  	return response unless (200..299).include? response[0] || response[2].to_s != 'OK'
   	response[2].close # release rails, let it work for other requests
   	
 		connect # to the remote
@@ -34,66 +32,64 @@ class RackAdapter
   	interval = 0.1
   	
   	timer = EventMachine::PeriodicTimer.new(interval) do
-  		elapsed += interval
-			if elapsed > 5 || @remote[name].newest_version > version
-				timer.cancel
+			next if (elapsed += interval) <= 5 && @remote[name].newest_version <= version
+			
+			timer.cancel
 				
-				body = []
-				if @remote[name].newest_version > version
-					@wave = @remote[name]
-					#version = @wave.newest_version
-					until version == @remote[name].newest_version
-						delta = @wave[version + 1]
-						version = delta.version
-						
-						delta.operations.each do |operation|
-							if operation.is_a? Operations::Mutate
-								unless operation.document_id == 'conversation'
-									blip = @wave.blips[operation.document_id]
-									parent = blip.parent_blip
-									parent = if parent
-										"'#{parent.name}'"
-									else
-										'undefined'
-									end
-									
-									authors = blip.authors.map {|author| author.to_html }
-									
-									body << "update_blip('#{blip.name}', #{parent}, '#{authors.join(', ')}', \"#{escape_js blip.to_xml}\");"
-								end # unless
-							elsif operation.is_a? Operations::RemoveUser
-								operation.who.each do |who|
-									body << "remove_user('#{who}');"
-								end # each
-							else#if operation.is_a? Operations::AddUser
-								operation.who.each do |who|
-									html = who.to_s
-									html = who.to_html if who.respond_to? :to_html
-									body << "add_user('#{who}', '#{html}');"
-								end # each
-							end # if
-						end # each
-					end # until
-				end # if
+			body = []
+			if @remote[name].newest_version > version
+				@wave = @remote[name]
+				#version = @wave.newest_version
+				until version == @remote[name].newest_version
+					delta = @wave[version + 1]
+					version = delta.version
+					
+					delta.operations.each do |operation|
+						if operation.is_a? Operations::Mutate
+							unless operation.document_id == 'conversation'
+								blip = @wave.blips[operation.document_id]
+								parent = blip.parent_blip
+								parent = if parent
+									"'#{parent.name}'"
+								else
+									'undefined'
+								end
+								
+								authors = blip.authors.map {|author| author.to_html }
+								
+								body << "update_blip('#{blip.name}', #{parent}, '#{authors.join(', ')}', \"#{escape_js blip.to_xml}\");"
+							end # unless
+						elsif operation.is_a? Operations::RemoveUser
+							operation.who.each do |who|
+								body << "remove_user('#{who}');"
+							end # each
+						else#if operation.is_a? Operations::AddUser
+							operation.who.each do |who|
+								html = who.to_s
+								html = who.to_html if who.respond_to? :to_html
+								body << "add_user('#{who}', '#{html}');"
+							end # each
+						end # if
+					end # each
+				end # until
+			end # if
 				
-				body << "version = #{version};"
-				
-				env['async.callback'].call [200, {
-					'Cache-Control' => 'no-cache',
-					'Content-Type' => 'text/javascript; charset=utf-8',
-				}, body.uniq.join("\n")]
-				
-				env['rack.errors'].write %{%s - %s [%s] "%s %s%s %s" %d\n} % [
-        env['HTTP_X_FORWARDED_FOR'] || env["REMOTE_ADDR"] || "-",
-        env["REMOTE_USER"] || "-",
-        Time.now.strftime("%d/%b/%Y %H:%M:%S"),
-        env["REQUEST_METHOD"],
-        env["PATH_INFO"],
-        env["QUERY_STRING"].empty? ? "" : "?"+env["QUERY_STRING"],
-        env["HTTP_VERSION"],
-        200 ]
-				
-			end # timer block
+			body << "at_version(#{version});"
+			
+			env['async.callback'].call [200, {
+				'Cache-Control' => 'no-cache',
+				'Content-Type' => 'text/javascript; charset=utf-8',
+			}, body.uniq.join("\n")]
+			
+			env['rack.errors'].write %{%s - %s [%s] "%s %s%s %s" %d\n} % [
+			env['HTTP_X_FORWARDED_FOR'] || env["REMOTE_ADDR"] || "-",
+			env["REMOTE_USER"] || "-",
+			Time.now.strftime("%d/%b/%Y %H:%M:%S"),
+			env["REQUEST_METHOD"],
+			env["PATH_INFO"],
+			env["QUERY_STRING"].empty? ? "" : "?"+env["QUERY_STRING"],
+			env["HTTP_VERSION"],
+			200 ]
 		
 		end # on elapsed
 

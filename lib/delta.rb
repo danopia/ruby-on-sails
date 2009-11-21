@@ -4,7 +4,7 @@ module Sails
 # Represents a version of a wavelet where the provider has details (as opposed
 # to FakeDelta).
 class Delta < BaseDelta
-	attr_accessor :author, :time, :applied, :signature, :server, :signer_id, :commited
+	attr_accessor :author, :time, :applied, :signature, :server, :signer_id, :commited, :record
 	
 	# Frozen deltas are considered to be unchanging, so the byte form is cached
 	# to greatly speed up the creation of packets.
@@ -22,6 +22,11 @@ class Delta < BaseDelta
 		@frozen = false
 		self.server = wave.provider.local
 		
+		@record = @wave.record.deltas.build :applied_to => @version,
+			:version => @version,
+			:server => @server.record,
+			:signer_id => Utils.encode64(@signer_id)
+		
 		super wave, @version
 	end
 	
@@ -32,6 +37,13 @@ class Delta < BaseDelta
 		
 		@server = server
 		@signer_id = server.certificate_hash if server
+		
+		if @record
+			@record.signer_id = Utils.encode64 @signer_id
+			@record.server = (@server.record rescue nil)
+		end
+		
+		@signer_id
 	end
 	
 	def local?
@@ -42,7 +54,19 @@ class Delta < BaseDelta
 		author = "#{author.login}@#{@wave.provider.domain}" if author.is_a? User
 		author = @wave.provider.find_or_create_user author unless author.is_a? WaveUser
 		
+		if @record
+			@record.author = author.address
+			@record.server = author.server.record
+			@record.user = author.account
+		end
+		
 		@author = author
+	end
+	
+	def time=(stamp)
+		@record.applied_at = stamp if @record
+		
+		@time = stamp
 	end
 	
 	# Parses an incoming delta, taking the wavelet name (from the XML attribute)
@@ -68,7 +92,8 @@ class Delta < BaseDelta
 		delta.time = timestamp if timestamp
 		delta.signature = data[:signature][:signature]
 		
-		delta.server = provider.servers.by_signer_id data[:signature][:signer_id]
+		delta.server = provider.servers.by_signer_id(data[:signature][:signer_id])
+		delta.server ||= wave.server if wave.boom
 		delta.signer_id = data[:signature][:signer_id]
 		
 		applied_to = delta.wave[delta.version]
@@ -99,7 +124,7 @@ class Delta < BaseDelta
 		if wave.boom
 			puts "Sending back the delta as applied, even though the wave went boom."
 			
-			delta.server << ['message', 'normal', "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(delta.to_applied)}]]></applied-delta></wavelet-update></item></items></event>"]
+			delta.server << ['message', 'normal', "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{wave.conv_root_path}\"><applied-delta><![CDATA[#{Utils.encode64(delta.to_applied)}]]></applied-delta></wavelet-update></item></items></event>"]
 			
 			return delta
 		end
@@ -114,6 +139,9 @@ class Delta < BaseDelta
 	# Add an operation to the delta.
 	def << operation
 		@operations << operation
+		
+		@record.version = @version + 1 if @record
+		
 		@version += 1
 	end
 	
@@ -142,9 +170,9 @@ class Delta < BaseDelta
 	def signature
 		return @signature if @signature
 		if @frozen
-			return @signature = @wave.provider.sign(delta_raw)
+			@signature = @wave.provider.sign delta_raw
 		else
-			return @wave.provider.sign(delta_raw)
+			@wave.provider.sign delta_raw
 		end
 	end
 	
@@ -152,14 +180,6 @@ class Delta < BaseDelta
 	# deltas to a wave's master server.
 	def to_s
 		return @to_s if @to_s && @frozen
-		pp ({
-			:delta => delta_data,
-			:signature => {
-				:signature => signature,
-				:signer_id => @signer_id,
-				:signer_id_alg => 1 # 1 = RSA
-			}
-		})
 		@to_s = Sails::ProtoBuffer.encode(:signed_delta, {
 			:delta => delta_data,
 			:signature => {
@@ -190,7 +210,7 @@ class Delta < BaseDelta
 	# Hash the delta, using SHA2 and trimming down the length of SHA1.
 	def hash
 		return @hash if @hash && @frozen
-		@hash = Digest::SHA2.digest("#{prev_hash}#{to_applied}")[0,20]
+		@hash = Utils::sha2("#{prev_hash}#{to_applied}")[0,20]
 	end
 	
 	# Freeze the delta for optimal speed once there aren't going to be any more
@@ -203,6 +223,15 @@ class Delta < BaseDelta
 		@hash = nil
 		@to_s = nil
 		@to_applied = nil
+		
+		if @record
+			@record.version = @version
+			@record.raw = Utils.encode64 self.delta_raw
+			@record.signature = Utils.encode64 self.signature
+			@record.current_hash = Utils.encode64 self.hash
+			@record.applied_at = self.time
+			@record.save
+		end
 	end
 	
 	alias commited? commited
@@ -238,7 +267,7 @@ class Delta < BaseDelta
 			
 			unless targets.empty?
 			
-				packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{encode64(to_applied)}]]></applied-delta></wavelet-update></item></items></event>"
+				packet = "<request xmlns=\"urn:xmpp:receipts\"/><event xmlns=\"http://jabber.org/protocol/pubsub#event\"><items><item><wavelet-update xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" wavelet-name=\"#{@wave.conv_root_path}\"><applied-delta><![CDATA[#{Utils.encode64(to_applied)}]]></applied-delta></wavelet-update></item></items></event>"
 				
 				puts "Sending to #{targets.join(', ')}"
 				

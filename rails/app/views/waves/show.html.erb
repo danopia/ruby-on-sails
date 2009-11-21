@@ -16,10 +16,7 @@
 </p>
 
 <hr/>
-<p><strong><a name="contents">Contents</a></strong></p>
-<div id="contents">
-<%#= @html %>
-</div>
+<div id="contents"></div>
 
 
 <%= form_remote_tag :url => wave_update_path(@wave.name), :complete => "submitted();", :html => {'id' => 'add-form'} %>
@@ -27,6 +24,8 @@
 	<!--Add under: <%= text_field_tag 'parent' %> (leave blank unless you know what you are doing)<br/>-->
 	<%= submit_tag "Add new blip" %>
 </form>
+
+<p id="version"></p>
 
 <script type="text/javascript" src="/javascripts/prototype.js"></script>
 <script type="text/javascript">
@@ -123,6 +122,11 @@ function add_user(address, html) {
 function remove_user(address) {
 	node = document.getElementById(address);
 	participants.removeChild(node);
+}
+
+function at_version(new_v) {
+	document.getElementById('version').innerHTML = 'At version ' + new_v;
+	version = new_v;
 }
 
 </script>
