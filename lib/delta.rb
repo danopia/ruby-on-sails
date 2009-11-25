@@ -30,6 +30,48 @@ class Delta < BaseDelta
 		super wave, @version
 	end
 	
+	def self.from_record wave, record
+		data = Sails::ProtoBuffer.parse :delta, Utils.decode64(record.raw)
+		
+		delta = Delta.new wave, record.author
+		delta.record = record
+		delta.server = wave.provider.find_or_create_server record.server.domain
+		delta.time = record.applied_at
+		delta.signature = Utils.decode64 record.signature
+		delta.version = data[:applied_to][:version]
+		
+		applied_to = wave[record.applied_at]
+		unless applied_to
+			applied_to = FakeDelta.new wave
+			applied_to.version = record.applied_at
+			applied_to.hash = data[:applied_to][:hash]
+			wave << applied_to
+		end
+		
+		unless delta.server
+			wave.request_cert delta, delta.signer_id
+		end
+		
+		data[:operations].each do |operation|
+			type = operation.keys.first
+			details = operation.values.first
+			case type
+				when :added
+					delta << Operations::AddUser.new(details)
+				when :removed
+					delta << Operations::RemoveUser.new(details)
+				when :mutate
+					delta << Operations::Mutate.parse(details)
+			end
+		end
+		
+		delta.commited = true
+		delta.freeze
+		wave << delta
+		
+		delta
+	end
+	
 	def server= server
 		if server.is_a? String
 			server = @wave.provider.servers[server]

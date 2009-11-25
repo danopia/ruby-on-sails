@@ -24,19 +24,22 @@ class Server
 		@certificate_hash = Utils.decode64 @record.signer_id if @record.signer_id
 		@name = @record.jid if @record.jid && @name.nil?
 		
-		load_waves
-		
 		if init
 			provider << self
 		else
 			provider.servers << self
 		end
+		
+		load_waves
 	end
 	
 	def load_waves
 		return unless @record
-		@record.waves.each do |wave|
-			p wave
+		@record.waves.each do |wave_rec|
+			wave = @provider.find_or_create_wave wave_rec.conv_root_path
+			wave_rec.deltas.each do |delta_rec|
+				Delta.from_record wave, delta_rec
+			end
 		end
 	end
 	
