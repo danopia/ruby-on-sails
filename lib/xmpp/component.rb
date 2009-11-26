@@ -14,9 +14,6 @@ module XMPP
 			@secret = secret
 			
 			start_auth
-		rescue => e
-			p e
-			puts e.message, e.backtrace
 		end
 		
 		def receive_object packet, node
@@ -36,7 +33,7 @@ module XMPP
 					
 					puts "Stream opened, sending challenge response"
 
-					key = Digest::SHA1.hexdigest(id + @secret)
+					key = Digest::SHA1.hexdigest id + @secret
 					send_raw "<handshake>#{key}</handshake>"
 				
 				when 'handshake'
