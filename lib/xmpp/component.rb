@@ -3,13 +3,24 @@ module Sails
 module XMPP
 	class Component < Connection
 		attr_accessor :server_host, :server_port, :subdomain, :jid, :domain, :secret, :config
+		
+		def self.handle name, type, &blck
+			@@handlers ||= {}
+			@@handlers[name] ||= {}
+			@@handlers[name][type] = blck
+		end
+		
+		def self.load_and_connect filename
+			begin
+				config = YAML.load open('sails.conf')
+			rescue
+				raise Sails::ProviderError, "Could not read the #{path} file. Make sure it exists and is proper YAML."
+			end
 
-		def initialize config_file
-			super()
-			
-			load_config config_file
-			
-			start_auth
+			server_host = config['xmpp-connect-host']
+			server_port = config['xmpp-connect-port'].to_i
+
+			connect server_host, server_port, config
 		end
 		
 		def me
@@ -46,7 +57,9 @@ module XMPP
 					#TODO: flush queues
 				
 				else
-					@@handler.call self, packet, node
+					if @@handlers[packet.name] && @@handlers[packet.name][packet.type]
+						@@handlers[packet.name][packet.type].call self, packet, node
+					end
 			end
 		end
 		
@@ -54,22 +67,32 @@ module XMPP
 			send_raw "<stream:stream xmlns=\"jabber:component:accept\" xmlns:stream=\"http://etherx.jabber.org/streams\" to=\"#{@jid}\">"
 		end
 		
-		def load_config path
-			puts "Loading YAML config"
-			begin
-				@config = YAML.load open(path)
-				
-				@server_host = @config['xmpp-connect-host']
-				@server_port = @config['xmpp-connect-port'].to_i
+		def initialize config
+			super()
+			load_config config
+			start_auth
+		end
+		
+		def load_config config
+			@config = config
 			
-				@subdomain = @config['service-name']
-				@domain = @config['domain-name']
-				@jid = "#{@subdomain}.#{@domain}"
-				
-				@secret = @config['xmpp-password']
-			rescue
-				raise Sails::ProviderError, "Could not read the #{path} file. Make sure it exists and is proper YAML."
-			end
+			@server_host = @config['xmpp-connect-host']
+			@server_port = @config['xmpp-connect-port'].to_i
+		
+			@subdomain = @config['service-name']
+			@domain = @config['domain-name']
+			@jid = "#{@subdomain}.#{@domain}"
+			
+			@secret = @config['xmpp-password']
+			
+			load_certs config['certificate-chain']
+			load_key config['private-key-path']
+		end
+		
+		def load_certs paths
+		end
+		
+		def load_key path
 		end
 		
 	end
