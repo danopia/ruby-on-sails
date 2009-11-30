@@ -78,7 +78,7 @@ class WaveServer < Component
 		
 		elsif (xml/'signature/certificate').any?
 			node = (xml/'signature').first
-			puts "Got a cert from #{from} for #{node['domain']}"
+			puts "Got a cert from #{packet.from} for #{node['domain']}"
 			
 			server = provider.find_or_create_server node['domain']
 			
@@ -95,17 +95,17 @@ class WaveServer < Component
 				end
 			end
 		
-		elsif (packet/'pubsub/publish/item/signature-response').any?
+		elsif (xml/'pubsub/publish/item/signature-response').any?
 			if server.state == :ponged
 				server.state = :ready
-				puts "#{from} ACK'ed my cert, now to flush the queue (state = :ready)"
+				puts "#{packe.from} ACK'ed my cert, now to flush the queue (state = :ready)"
 				server.flush
 				
 			else
-				puts "#{from} ACK'ed my cert."
+				puts "#{packet.from} ACK'ed my cert."
 			end
 			
-		elsif (packet/'pubsub/items/item/applied-delta').any?
+		elsif (xml/'pubsub/items/item/applied-delta').any?
 			id =~ /^100-(.+)$/
 			if $1 && provider[$1]
 				wave = provider[$1]
@@ -120,7 +120,6 @@ class WaveServer < Component
 			else
 				puts "I didn't request this?"
 			end
-		end
 		end
 	end
 	
@@ -154,67 +153,68 @@ class WaveServer < Component
 			
 			packet.respond "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish><item><submit-response xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" application-timestamp=\"#{delta.time}\" operations-applied=\"#{delta.operations.size}\"><hashed-version history-hash=\"#{Sails::Utils.encode64 delta.hash}\" version=\"#{delta.version}\"/></submit-response></item></publish></pubsub>"
 		end
-		
-			#when [:message, :normal], [:message, :none]
-				#packet.children.each do |message|
-					#subtype = message.name
-					#if subtype == 'received'
-						#if server.state == :details
-							#server.state = :ponged
-							#puts "#{from} ponged, attempting to send my cert (state = :ponged)"
-							#
-							#payload = provider.local.certificates64.map do |cert|
-								#"<certificate><![CDATA[#{cert}]]></certificate>"
-							#end.join ''
-							#
-							#provider.send_xml 'iq', 'set', from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.domain}\" algorithm=\"SHA256\">#{payload}</signature></item></publish></pubsub>"
-						#
-						#else
-							#puts "#{from} ACK'ed our previous packet."
-						#end
-						#
-					#elsif subtype == 'request'
-					#
-						#if (packet/'event/items/item/wavelet-update').any?
-							#wave = nil
-							#(packet/'event/items/item/wavelet-update').each do |update|
-								#next unless (update/'applied-delta').any?
-								#
-								#delta = Sails::Delta.parse(provider, update['wavelet-name'], Sails::Utils.decode64(update.inner_text), true)
-								#puts "Got delta version #{delta.version rescue -1}"
-								#wave = delta.wave if delta
-							#end
-							#
-							#wave.apply(:newest) if wave && wave.complete?(true)
-						#end
-						#
-						#provider.send_xml 'message', 'normal', from, '<received xmlns="urn:xmpp:receipts"/>', id
-						#
-					#elsif subtype == 'ping'
-						#puts "Got a ping from #{from}"
-					#
-					#end
-					#
-					#
-				#end
-				#
-			#when [:iq, :error]
-				#if (packet/'remote-server-not-found').any?
-				#
-					#if "wave.#{server.domain}" == server.name
-						#puts "Already tried the wave. trick on #{from}. (state = :error)"
-						#server.state = :error
-					#else
-						#puts "Trying the wave. trick on #{from}. (state = :listing)"
-						#server.name = "wave.#{server.domain}"
-						#server.state = :listing
-						#provider.send_xml 'iq', 'get', server.name, '<query xmlns="http://jabber.org/protocol/disco#info"/>'
-					#end
-					#
-				#else
-					#puts 'ERROR!'
-				#end
+	end
+	
+	handle 'message', 'normal' do |conn, packet, xml|
+		xml.children.each do |message|
+			subtype = message.name
+			if subtype == 'received'
+				if server.state == :details
+					server.state = :ponged
+					puts "#{packet.from} ponged, attempting to send my cert (state = :ponged)"
+					
+					payload = provider.local.certificates64.map do |cert|
+						"<certificate><![CDATA[#{cert}]]></certificate>"
+					end.join ''
+					
+					packet.conn.send 'iq', 'set', packet.from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.domain}\" algorithm=\"SHA256\">#{payload}</signature></item></publish></pubsub>"
 				
+				else
+					puts "#{packet.from} ACK'ed our previous packet."
+				end
+				
+			elsif subtype == 'request'
+			
+				if (xml/'event/items/item/wavelet-update').any?
+					wave = nil
+					(xml/'event/items/item/wavelet-update').each do |update|
+						next unless (update/'applied-delta').any?
+						
+						delta = Sails::Delta.parse(provider, update['wavelet-name'], Sails::Utils.decode64(update.inner_text), true)
+						puts "Got delta version #{delta.version rescue -1}"
+						wave = delta.wave if delta
+					end
+					
+					wave.apply(:newest) if wave && wave.complete?(true)
+				end
+				
+				packet.conn.send 'message', 'normal', packet.from, '<received xmlns="urn:xmpp:receipts"/>', id
+				
+			elsif subtype == 'ping'
+				puts "Got a ping from #{packet.from}"
+			
+			end
+		end
+	end
+	
+	handle 'iq', 'error' do |conn, packet, xml|
+		if (xml/'remote-server-not-found').any?
+		
+			if "wave.#{server.domain}" == server.name
+				puts "Already tried the wave. trick on #{packet.from}. (state = :error)"
+				server.state = :error
+			else
+				puts "Trying the wave. trick on #{packet.from}. (state = :listing)"
+				server.name = "wave.#{server.domain}"
+				server.state = :listing
+				packet.conn.send 'iq', 'get', server.name, '<query xmlns="http://jabber.org/protocol/disco#info"/>'
+			end
+			
+		else
+			puts 'ERROR!'
+		end
+	end
+
 end # waveserver
 end # xmpp
 end # sails
