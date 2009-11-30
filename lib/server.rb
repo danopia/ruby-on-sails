@@ -4,13 +4,13 @@ module Sails
 # Represents a server, remote or local, and tracks certificates, waves, and the
 # queue of packets to send to a server once a connection is established.
 class Server
-	attr_accessor :provider, :certificates, :certificate_hash, :domain, :name, :waves, :queue, :state, :users, :record
+	attr_accessor :provider, :certificates, :certificate_hash, :domain, :jids, :jid, :waves, :queue, :state, :users, :record
 	
 	# Create a new server.
-	def initialize(provider, domain, name=nil, init=true)
+	def initialize(provider, domain, jid=nil, init=true)
 		@provider = provider
 		@domain = domain
-		@name = name || domain
+		@jid = jid
 		@waves = {}
 		@users = {}
 		@queue = []
@@ -19,10 +19,10 @@ class Server
 		
 		@record = ::Server.find_by_domain domain
 		@record ||= ::Server.find_by_jid name || domain
-		@record ||= ::Server.create :domain => domain, :jid => name
+		@record ||= ::Server.create :domain => domain, :jid => jid
 		
 		@certificate_hash = Utils.decode64 @record.signer_id if @record.signer_id
-		@name = @record.jid if @record.jid && @name.nil?
+		@jid = @record.jid if @record.jid && @jid.nil?
 		
 		if init
 			provider << self
@@ -53,7 +53,7 @@ class Server
 		@certificates = certs.map do |cert|
 			if cert.is_a? String
 				unless cert.include? 'BEGIN CERTIFICATE'
-					cert = Base64.encode64(Base64.decode64(cert))
+					cert = Base64.encode64(Base64.decode64(cert)) # add line breaks
 					cert = "-----BEGIN CERTIFICATE-----\n#{cert}-----END CERTIFICATE-----\n"
 				end
 				cert = OpenSSL::X509::Certificate.new cert
@@ -75,14 +75,14 @@ class Server
 	end
 	
 	# Sets the server name.
-	def name= new_name
-		@provider.servers.delete @name unless !@name || @name == @domain
-		@provider.servers[new_name] = self
+	def jid= jid
+		@provider.servers.delete @jid unless !@jid || @jid == @domain
+		@provider.servers[jid] = self
 		
-		@record.jid = new_name
+		@record.jid = jid
 		@record.save if @record.changed?
 		
-		@name = new_name
+		@jid = jid
 	end
 	
 	# Look up a wave.
