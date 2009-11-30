@@ -1,18 +1,29 @@
 module Sails
 module XMPP
 class WaveServer < Component
+	attr_accessor :provider
+	
+	def initialize config
+		super
+		
+		@provider = Provider.new @domain, @subdomain, self
+	#rescue => e
+		#puts e.class, e.message, e.backtrace
+	end
+	
 	handle 'iq', 'get' do |conn, packet, xml|
+		server = conn.provider.find_or_create_server packet.from
 		if (xml/'query').any?
 			if (xml/'query').first['xmlns'].include? 'items'
-				packet.respond "<query xmlns=\"http://jabber.org/protocol/disco#items\"><item jid=\"#{packet.connection.jid}\" name=\"#{conn.config['identity']}\"/></query>"
+				packet.respond "<query xmlns=\"http://jabber.org/protocol/disco#items\"><item jid=\"#{conn.jid}\" name=\"#{conn.config['identity']}\"/></query>"
 			else
-				packet.respond "<query xmlns=\"http://jabber.org/protocol/disco#info\"><identity category=\"collaboration\" type=\"ruby-on-sails\" name=\"#{conn.config['identity']}\"/><feature var=\"http://waveprotocol.org/protocol/0.2/waveserver\"/></query>"
+				packet.respond "<query xmlns=\"http://jabber.org/protocol/disco#info\"><identity category=\"collaboration\" type=\"ruby-on-sails\" name=\"#{conn.config['identity']}\"/><feature var=\"http://waveprotocol.org/protocol/0.2/waveserver\"/><feature var=\"http://jabber.org/protocol/disco#items\"/><feature var=\"http://jabber.org/protocol/disco#info\"/></query>"
 			end
 		elsif (xml/'pubsub/items/delta-history').any?
 			puts "#{packet.from} requested some deltas"
 			
 			node = (xml/'pubsub/items/delta-history').first
-			wave = provider.find_or_create_wave node['wavelet-name']
+			wave = conn.provider.find_or_create_wave node['wavelet-name']
 			wave.boom = true if wave.deltas.size == 1 && wave.local?
 			
 			payload = ''
@@ -40,7 +51,7 @@ class WaveServer < Component
 			
 			node = (xml/'pubsub/items/signer-request').first
 			hash = decode64 node['signer-id']
-			server = provider.servers.by_signer_id hash
+			server = conn.provider.servers.by_signer_id hash
 
 			if server
 				puts "Sending a cert to #{packet.from} on request, for #{server.domain}"
@@ -58,6 +69,7 @@ class WaveServer < Component
 	end
 	
 	handle 'iq', 'result' do |conn, packet, xml|
+		server = conn.provider.find_or_create_server packet.from
 		if (xml/'query').any?
 			if (xml/'query').first['xmlns'].include? 'items'
 				puts "Got service listing from #{packet.from}:"
@@ -80,14 +92,14 @@ class WaveServer < Component
 			node = (xml/'signature').first
 			puts "Got a cert from #{packet.from} for #{node['domain']}"
 			
-			server = provider.find_or_create_server node['domain']
+			server = conn.provider.find_or_create_server node['domain']
 			
 			server.domain = node['domain']
 			server.certificates = (node/'certificate').map do |cert|
 				cert.inner_text
 			end
 			
-			provider.remote.all_waves.each do |wave|
+			conn.provider.remote.all_waves.each do |wave|
 				wave.deltas.each_value do |delta|
 					next unless delta.is_a? Sails::Delta
 					delta.server = server if delta.signer_id == server.certificate_hash
@@ -98,7 +110,7 @@ class WaveServer < Component
 		elsif (xml/'pubsub/publish/item/signature-response').any?
 			if server.state == :ponged
 				server.state = :ready
-				puts "#{packe.from} ACK'ed my cert, now to flush the queue (state = :ready)"
+				puts "#{packet.from} ACK'ed my cert, now to flush the queue (state = :ready)"
 				server.flush
 				
 			else
@@ -112,7 +124,7 @@ class WaveServer < Component
 				puts "Got history for #{wave.name}"
 				
 				(packet/'pubsub/items/item/applied-delta').each do |update|
-					delta = Sails::Delta.parse(provider, wave.conv_root_path, Sails::Utils.decode64(update.inner_text), true)
+					delta = Sails::Delta.parse(conn.provider, wave.conv_root_path, Sails::Utils.decode64(update.inner_text), true)
 					puts "Got a delta, version #{delta.version}"
 				end
 				
@@ -124,16 +136,17 @@ class WaveServer < Component
 	end
 	
 	handle 'iq', 'set' do |conn, packet, xml|
+		server = conn.provider.find_or_create_server packet.from
 		if (xml/'certificate').any?
 			node = (xml/'signature').first
-			puts "Got a cert from for #{node['domain']}"
+			puts "Got a cert from #{node['domain']}"
 			
 			server.domain = node['domain']
 			server.certificates = (node/'certificate').map do |cert|
 				cert.inner_text
 			end
 			
-			provider.remote.all_waves.each do |wave|
+			conn.provider.remote.all_waves.each do |wave|
 				wave.deltas.each_value do |delta|
 					next unless delta.is_a? Sails::Delta
 					next unless delta.signer_id == server.certificate_hash
@@ -156,6 +169,7 @@ class WaveServer < Component
 	end
 	
 	handle 'message', 'normal' do |conn, packet, xml|
+		server = conn.provider.find_or_create_server packet.from
 		xml.children.each do |message|
 			subtype = message.name
 			if subtype == 'received'
@@ -163,11 +177,11 @@ class WaveServer < Component
 					server.state = :ponged
 					puts "#{packet.from} ponged, attempting to send my cert (state = :ponged)"
 					
-					payload = provider.local.certificates64.map do |cert|
+					payload = conn.provider.local.certificates64.map do |cert|
 						"<certificate><![CDATA[#{cert}]]></certificate>"
 					end.join ''
 					
-					packet.conn.send 'iq', 'set', packet.from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{provider.domain}\" algorithm=\"SHA256\">#{payload}</signature></item></publish></pubsub>"
+					conn.send 'iq', 'set', packet.from, "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><publish node=\"signer\"><item><signature xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" domain=\"#{conn.provider.domain}\" algorithm=\"SHA256\">#{payload}</signature></item></publish></pubsub>"
 				
 				else
 					puts "#{packet.from} ACK'ed our previous packet."
@@ -180,7 +194,7 @@ class WaveServer < Component
 					(xml/'event/items/item/wavelet-update').each do |update|
 						next unless (update/'applied-delta').any?
 						
-						delta = Sails::Delta.parse(provider, update['wavelet-name'], Sails::Utils.decode64(update.inner_text), true)
+						delta = Sails::Delta.parse(conn.provider, update['wavelet-name'], Sails::Utils.decode64(update.inner_text), true)
 						puts "Got delta version #{delta.version rescue -1}"
 						wave = delta.wave if delta
 					end
@@ -188,7 +202,7 @@ class WaveServer < Component
 					wave.apply(:newest) if wave && wave.complete?(true)
 				end
 				
-				packet.conn.send 'message', 'normal', packet.from, '<received xmlns="urn:xmpp:receipts"/>', id
+				conn.send 'message', 'normal', packet.from, '<received xmlns="urn:xmpp:receipts"/>', id
 				
 			elsif subtype == 'ping'
 				puts "Got a ping from #{packet.from}"
@@ -198,6 +212,7 @@ class WaveServer < Component
 	end
 	
 	handle 'iq', 'error' do |conn, packet, xml|
+		server = conn.provider.find_or_create_server packet.from
 		if (xml/'remote-server-not-found').any?
 		
 			if "wave.#{server.domain}" == server.name

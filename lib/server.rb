@@ -18,7 +18,7 @@ class Server
 		@certificates = []
 		
 		@record = ::Server.find_by_domain domain
-		@record ||= ::Server.find_by_jid name || domain
+		@record ||= ::Server.find_by_jid jid || domain
 		@record ||= ::Server.create :domain => domain, :jid => jid
 		
 		@certificate_hash = Utils.decode64 @record.signer_id if @record.signer_id

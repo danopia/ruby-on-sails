@@ -8,7 +8,7 @@ require 'sails'
 
 require 'agents/echoey'
 
-#Sails::Utils.connect_db
+Sails::Utils.connect_db
 
 #if config['ping']
 	#puts "Sending a ping to #{config['ping']} due to configoration."
@@ -34,10 +34,4 @@ require 'lib/xmpp/waveserver'
 
 EventMachine.run {
 	provider = Sails::XMPP::WaveServer.load_and_connect 'sails.conf'
-	
-
-	#provider.start_remote
 }
-
-
-#		server = provider.find_or_create_server from

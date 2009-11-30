@@ -21,7 +21,7 @@ class ServerList < Hash
 	
 	def << server
 		self[server.domain] = server
-		self[server.name] = server
+		self[server.jid] = server
 	end
 	
 	def by_signer_id hash
