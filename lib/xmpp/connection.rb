@@ -9,7 +9,9 @@ module XMPP
 		attr_accessor :port, :ip
 		
 		def self.connect host, port, *args
-			EventMachine::connect host, port, self, *args
+			conn = EventMachine::connect host, port, self, *args
+  		EventMachine::add_periodic_timer(60) { conn.send_raw ' ' }
+  		conn
 		end
 		def self.start_loop *args
 			EventMachine::run { self.connect *args }
