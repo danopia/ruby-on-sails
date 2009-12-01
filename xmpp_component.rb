@@ -6,20 +6,15 @@ require 'yaml'
 
 require 'sails'
 
-require 'agents/echoey'
+#require 'agents/echoey'
 
 Sails::Utils.connect_db
 
-#if config['ping']
-	#puts "Sending a ping to #{config['ping']} due to configoration."
-	#provider << Sails::Server.new(provider, config['ping'], config['ping'])
+#trap("INT") do
+#	provider.remote.stop_service
+#	puts 'OBAI'
+#	exit
 #end
-
-trap("INT") do
-	provider.remote.stop_service
-	puts 'OBAI'
-	exit
-end
 
 #Thread.new do
 	#provider.send_data ' ' while sleep 60
@@ -34,4 +29,9 @@ require 'lib/xmpp/waveserver'
 
 EventMachine.run {
 	provider = Sails::XMPP::WaveServer.load_and_connect 'sails.conf'
+
+	if provider.config['ping']
+		puts "Sending a ping to #{provider.config['ping']} due to configuration."
+		Sails::Server.new(provider, provider.config['ping'], provider.config['ping'])
+	end
 }

@@ -50,6 +50,12 @@ module Sails
 		def self.sha2 data
 			Digest::SHA2.digest data
 		end
+		
+		# Parse a wave://server/w+wave/wavelet address into 3 parts.
+		def self.parse_wavelet_address address
+			raise StandardError, 'invalid format' unless address =~ /^wave:\/\/(.+)\/w\+(.+)\/(.+)$/
+			[$1, $2, $3]
+		end
 	
 	end
 

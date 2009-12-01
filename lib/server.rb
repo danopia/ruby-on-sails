@@ -11,6 +11,7 @@ class Server
 		@provider = provider
 		@domain = domain
 		@jid = jid
+		@jids = []
 		@waves = {}
 		@users = {}
 		@queue = []
@@ -24,11 +25,8 @@ class Server
 		@certificate_hash = Utils.decode64 @record.signer_id if @record.signer_id
 		@jid = @record.jid if @record.jid && @jid.nil?
 		
-		if init
-			provider << self
-		else
-			provider.servers << self
-		end
+		provider.servers << self
+		disco 'items' if init
 		
 		load_waves
 	end
@@ -74,6 +72,12 @@ class Server
 		@certificates.map {|cert| Utils::encode64 cert.to_der }
 	end
 	
+	def certificate_xml
+		certificates64.map do |cert|
+			"<certificate><![CDATA[#{cert}]]></certificate>"
+		end.join ''
+	end
+	
 	# Sets the server name.
 	def jid= jid
 		@provider.servers.delete @jid unless !@jid || @jid == @domain
@@ -83,6 +87,11 @@ class Server
 		@record.save if @record.changed?
 		
 		@jid = jid
+		
+		return unless @state == :listing
+		@state = :details
+		ping
+		@jid
 	end
 	
 	# Look up a wave.
@@ -97,7 +106,7 @@ class Server
 	def << item
 		if item.is_a? Array # packet
 			if @state == :ready
-				@provider.send_xml item[0], item[1], @name, item[2], item[3]
+				@provider.send item[0], item[1], @jid, item[2], item[3]
 			else
 				@queue << item
 			end
@@ -119,7 +128,7 @@ class Server
 		return nil unless @queue && @queue.any?
 		
 		@queue.each do |packet|
-			@provider.send_xml packet[0], packet[1], @name, packet[2], packet[3]
+			@provider.send packet[0], packet[1], @jid, packet[2], packet[3]
 		end
 		
 		@queue = nil
@@ -130,6 +139,21 @@ class Server
 		name = Utils.random_string(length)
 		name = Utils.random_string(length) while self[name]
 		name
+	end
+	
+	def disco dance, jid=nil
+		target = jid || (dance == 'items' ? @domain : @jid)
+		@provider.disco target, dance
+	end
+	
+	def ping
+		@provider.queue 'message', 'normal', @jid || @domain, '<ping xmlns="http://waveprotocol.org/protocol/0.2/waveserver"/><request xmlns="urn:xmpp:receipts"/>'
+	end
+	
+	def disco_jids
+		p @state
+		@state = :listing
+		@jids.each {|jid| disco 'info', jid }
 	end
 end # class
 

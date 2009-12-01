@@ -1,40 +1,6 @@
 
 module Sails
 
-# Variation of Hash with a degree of case-insensitive keys.
-class ServerList < Hash
-	attr_accessor :provider
-	
-	def [](server)
-		return nil unless server
-		super server.downcase
-	end
-	def []=(name, server)
-		return nil unless name
-		super name.downcase, server
-	end
-	
-	def delete server
-		return nil unless server
-		super server.downcase
-	end
-	
-	def << server
-		self[server.domain] = server
-		self[server.jid] = server
-	end
-	
-	def by_signer_id hash
-		server = values.find{|server| server.certificate_hash == hash}
-		return server if server
-		
-		record = ::Server.find_by_signer_id Utils.encode64(hash)
-		server = Server.new @provider, record.domain if record
-		
-		server
-	end
-end
-
 # Most popular class. Represents the local server and the waves on it, and
 # keeps a list of external servers.
 class Provider
@@ -156,25 +122,6 @@ class Provider
 			
 		else
 			raise ArgumentError, 'expected a Server or Wave'
-		end
-	end
-	
-	# Init a Server connection by pinging it and sending a cert. Called for you
-	# if/when you << the Server to the Provider.
-	def init_server server
-		return unless self.ready? && server.state == :uninited
-		return if server == @local
-
-		target = server.name || server.domain
-		if target == 'wavesandbox.com'
-			send_xml 'iq', 'get', "wave.#{target}",
-				'<query xmlns="http://jabber.org/protocol/disco#info"/>'
-			server.state = :listing
-			server.name = "wave.#{server.domain}"
-		else
-			send_xml 'iq', 'get', target,
-				'<query xmlns="http://jabber.org/protocol/disco#items"/>'
-			server.state = :sent_item_request
 		end
 	end
 	
