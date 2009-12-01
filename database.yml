@@ -1,13 +1,13 @@
 defaults: &defaults
    adapter: mysql
    encoding: utf8
-   username: sails
+   username: sails2
    password: JapmMF6CYR7wvhHd
-   host: localhost
+   host: danopia
 
-#development:
-   #<<: *defaults
-   #database: sails_dev
+development:
+   <<: *defaults
+   database: sails_dev
 
 production:
    <<: *defaults
@@ -19,11 +19,11 @@ production:
 
 # SQLite version 3.x
 #   gem install sqlite3-ruby (not necessary on OS X Leopard)
-development:
-  adapter: sqlite3
-  database: db/development.sqlite3
-  pool: 5
-  timeout: 5000
+#development:
+  #adapter: sqlite3
+  #database: db/development.sqlite3
+  #pool: 5
+  #timeout: 5000
 
 # Warning: The database defined as "test" will be erased and
 # re-generated from your development database when you run "rake".
