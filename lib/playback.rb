@@ -48,6 +48,7 @@ class Playback
 			
 			version = @wave.newest_version if version == :newest
 			delta = @wave[version]
+			return unless delta
 		else
 			delta = version
 		end

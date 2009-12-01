@@ -124,14 +124,21 @@ class Server
 	
 	# Send the queue out (state must be :ready)
 	def flush
+		p queue
 		return false unless @state == :ready && @provider.ready?
 		return nil unless @queue && @queue.any?
+		p :MEEEP
 		
 		@queue.each do |packet|
 			@provider.send packet[0], packet[1], @jid, packet[2], packet[3]
 		end
 		
 		@queue = nil
+	end
+	
+	def ready!
+		@state = :ready
+		flush
 	end
 	
 	# Create a unique wave name, accross all waves known to this server

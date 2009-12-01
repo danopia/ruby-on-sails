@@ -3,7 +3,8 @@ require 'eventmachine'
 require 'socket'
 require 'json'
 
-module Sails2
+module Sails
+module Protocol
 
 class Client
   attr_accessor :username, :address, :record, :server, :connected_at, :last_action
@@ -70,6 +71,7 @@ class Server < EventMachine::Connection
     
     case action
       when 'login'
+        p @provider.servers.keys.uniq
         @client = Client.login data['user'], data['pass'], self
         if @client
           puts "#{@client.address} logged in (#{data['pass']})."
@@ -101,6 +103,7 @@ class Server < EventMachine::Connection
   	INSTANCES.delete self
   end
 end # class
+end # module
 end # module
 
 #EM.run do

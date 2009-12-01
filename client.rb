@@ -4,6 +4,7 @@ require 'socket'
 require 'json'
 
 module Sails
+module Protocol
 
 class ClientConnection < EventMachine::Connection
   attr_accessor :port, :ip, :username, :address
@@ -62,7 +63,8 @@ class ClientConnection < EventMachine::Connection
   end
 end # class
 end # module
+end # module
 
 EM.run do
-  EM.connect "127.0.0.1", 7849, Sails::ClientConnection, 'danopia', 'test'
+  EM.connect "127.0.0.1", 7849, Sails::Protocol::ClientConnection, 'danopia', 'test'
 end

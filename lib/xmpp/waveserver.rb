@@ -1,3 +1,4 @@
+
 module Sails
 module XMPP
 class WaveServer < Component
@@ -75,6 +76,10 @@ class WaveServer < Component
 			super # for packets
 		end
 	end
+	
+	def all_waves
+    waves = @servers.values.uniq.map {|server| server.waves.values}.flatten
+  end
 	
 	# Flush all the remote servers.
 	def flush
@@ -201,9 +206,9 @@ class WaveServer < Component
 				cert.inner_text
 			end
 			
-			conn.remote.all_waves.each do |wave|
+			conn.all_waves.each do |wave|
 				wave.deltas.each_value do |delta|
-					next unless delta.is_a? Sails::Delta
+					next unless delta.is_a? Delta
 					delta.server = server if delta.signer_id == server.certificate_hash
 					puts "Changed server for #{wave.conv_root_path} ##{delta.version}."
 				end
@@ -211,22 +216,21 @@ class WaveServer < Component
 		
 		elsif (xml/'pubsub/publish/item/signature-response').any?
 			if packet.server.state == :ponged
-				packet.server.state = :ready
 				puts "#{packet.from} ACK'ed my cert, now to flush the queue (state = :ready)"
-				packet.server.flush
+				packet.server.ready!
 				
 			else
 				puts "#{packet.from} ACK'ed my cert."
 			end
 			
 		elsif (xml/'pubsub/items/item/applied-delta').any?
-			id =~ /^100-(.+)$/
-			if $1 && provider[$1]
-				wave = provider[$1]
+			packet.id =~ /^100-(.+)$/
+			if $1 && conn[$1]
+				wave = conn[$1]
 				puts "Got history for #{wave.name}"
 				
-				(packet/'pubsub/items/item/applied-delta').each do |update|
-					delta = Sails::Delta.parse(conn, wave.conv_root_path, Sails::Utils.decode64(update.inner_text), true)
+				(xml/'pubsub/items/item/applied-delta').each do |update|
+					delta = Delta.parse(conn, wave.conv_root_path, Utils.decode64(update.inner_text), true)
 					puts "Got a delta, version #{delta.version}"
 				end
 				
@@ -247,7 +251,7 @@ class WaveServer < Component
 				cert.inner_text
 			end
 			
-			conn.remote.all_waves.each do |wave|
+			conn.all_waves.each do |wave|
 				wave.deltas.each_value do |delta|
 					next unless delta.is_a? Sails::Delta
 					next unless delta.signer_id == packet.server.certificate_hash
@@ -298,7 +302,7 @@ class WaveServer < Component
 					wave.apply(:newest) if wave && wave.complete?(true)
 				end
 				
-				conn.send 'message', 'normal', packet.from, '<received xmlns="urn:xmpp:receipts"/>', id
+				conn.send 'message', 'normal', packet.from, '<received xmlns="urn:xmpp:receipts"/>', packet.id
 				
 			elsif subtype == 'ping'
 				puts "Got a ping from #{packet.from}"

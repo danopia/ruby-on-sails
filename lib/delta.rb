@@ -15,7 +15,6 @@ class Delta < BaseDelta
 	# version=. You should also try to set the time, if you can get it.
 	def initialize wave, author=nil
 		@wave = wave
-		self.author = author
 		@version = wave.newest_version
 		@time = Time.now.to_i * 1000
 		@commited = false
@@ -26,6 +25,8 @@ class Delta < BaseDelta
 			:version => @version,
 			:server => @server.record,
 			:signer_id => Utils.encode64(@signer_id)
+			
+		self.author = author if author # must be here to work with the record
 		
 		super wave, @version
 	end
@@ -40,10 +41,10 @@ class Delta < BaseDelta
 		delta.signature = Utils.decode64 record.signature
 		delta.version = data[:applied_to][:version]
 		
-		applied_to = wave[record.applied_at]
+		applied_to = wave[record.applied_to]
 		unless applied_to
 			applied_to = FakeDelta.new wave
-			applied_to.version = record.applied_at
+			applied_to.version = record.applied_to
 			applied_to.hash = data[:applied_to][:hash]
 			wave << applied_to
 		end
@@ -245,7 +246,11 @@ class Delta < BaseDelta
 	
 	# Find the previous version's hash. This is made simple because of FakeDelta.
 	def prev_hash
-		puts "I am #{@version}, looking at #{@version - @operations.size} (#{@wave[@version - @operations.size].version}, #{@wave[@version - @operations.size].class})"
+		puts 'hi'
+		puts "I am #{@version}"
+		puts "looking at #{@version - @operations.size}"
+		puts "(#{@wave[@version - @operations.size].version}," rescue nil
+		puts "#{@wave[@version - @operations.size].class})"
 		@wave[@version - @operations.size].hash
 	end
 	
@@ -268,6 +273,7 @@ class Delta < BaseDelta
 		
 		if @record
 			@record.version = @version
+			@record.applied_to = @version - @operations.size
 			@record.raw = Utils.encode64 self.delta_raw
 			@record.signature = Utils.encode64 self.signature
 			@record.current_hash = Utils.encode64 self.hash

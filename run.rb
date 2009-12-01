@@ -22,8 +22,6 @@ Sails::Utils.connect_db
 	#provider.send_data ' ' while sleep 60
 #end
 
-puts 'Entering program loop'
-
 require 'lib/xmpp/packet'
 require 'lib/xmpp/connection'
 require 'lib/xmpp/component'
@@ -37,5 +35,5 @@ EventMachine.run {
 		Sails::Server.new(provider, provider.config['ping'], provider.config['ping'], false)
 	end
   
-  EM.start_server "127.0.0.1", 7849, Sails2::Server, provider
+  EM.start_server "127.0.0.1", 7849, Sails::Protocol::Server, provider
 }

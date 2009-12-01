@@ -4,7 +4,6 @@ class WaveUser
 	attr_accessor :username, :server, :account, :provider
 	
 	def initialize provider, address
-		provider = provider.remote if provider.is_a? Remote
 		@provider = provider
 		
 		@username, domain = address.downcase.split '@', 2

@@ -43,7 +43,7 @@ class Wave < Playback
 			blip version
 		else
 			return nil if version > newest_version
-			version += 1 until @deltas[version]
+			version += 1 until @deltas[version] || version > 10000 # TODO: fix the 10000 check
 			@deltas[version]
 		end
 	end
@@ -99,7 +99,7 @@ class Wave < Playback
 			signer_id ||= delta.signer_id
 		end
 		
-		@server << ['iq', 'get', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"signer\"><signer-request xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" signer-id=\"#{encode64 signer_id}\" history-hash=\"#{encode64 delta[0]}\" version=\"#{delta[1]}\" wavelet-name=\"#{conv_root_path}\"/></items></pubsub>"]
+		@server << ['iq', 'get', "<pubsub xmlns=\"http://jabber.org/protocol/pubsub\"><items node=\"signer\"><signer-request xmlns=\"http://waveprotocol.org/protocol/0.2/waveserver\" signer-id=\"#{Utils.encode64 signer_id}\" history-hash=\"#{Utils.encode64 delta[0]}\" version=\"#{delta[1]}\" wavelet-name=\"#{conv_root_path}\"/></items></pubsub>"]
 	end
 	
 	def post delta, force=false
@@ -115,16 +115,32 @@ class Wave < Playback
 	#
 	# Pass true as the argument to request more history if incomplete; pass a
 	# Hash and it'll set key packet-id to the current Wave.
-	def complete?(request_more=false)
+	def complete?(request_more=false) # TODO: Anything possible!
 		complete = true
-		@deltas.each_value do |delta|
-			if delta.is_a?(FakeDelta) && delta.version != 0
-				complete = false
+		#~ @deltas.each_value do |delta|
+			#~ if delta.is_a?(FakeDelta) && delta.version != 0
+				#~ complete = false
+			#~ end
+		#~ end
+		version = self[1].version
+		until version == newest_version
+			delta = self[version]
+			break if delta.version == newest_version
+			p delta.version
+			p delta.operations.size
+			p delta.applied_to.version
+			p newest_version
+			puts
+			if (delta.applied_to.version + delta.operations.size) != delta.version
+				request_history nil, self.newest if request_more
+				return false
 			end
+			version = delta.version + 1
 		end
 		
 		return complete if complete || !request_more
 		
+		p @deltas.keys
 		request_history nil, self.newest
 	end
 	
