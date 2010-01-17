@@ -5,6 +5,11 @@ module Sails
 class ServerList < Hash
 	attr_accessor :provider
 	
+	def initialize provider=nil
+		super()
+		@provider = provider
+	end
+	
 	def [](server)
 		return nil unless server
 		super server.downcase

@@ -8,16 +8,12 @@ class Provider
 	
 	# Create a new provider.
 	def initialize(domain, subdomain='wave', sock=nil)
-		subdomain = "#{subdomain}." if subdomain
-
 		@domain = domain
-		@name = "#{subdomain}#{domain}"
-		@servers = ServerList.new
+		@name = [subdomain, domain] * '.'
+		@servers = ServerList.new self
 		@sock = sock
 		@packet_ids = {}
 		@ready = false
-		
-		@servers.provider = self
 
 		@local = Server.new self, @domain, @name, false
 		@local.state = :local
