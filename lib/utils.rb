@@ -4,7 +4,7 @@ require 'base64'
 require 'digest/sha1'
 require 'digest/sha2'
 
-# Monkey-patch in some convenience methods. The module is seperately defined
+# Monkey-patch in some convenience methods. The module is separately entered
 # for RDoc.
 module OpenSSL #:nodoc: all
 	class X509::Name
@@ -55,6 +55,13 @@ module Sails
 		def self.parse_wavelet_address address
 			raise StandardError, 'invalid format' unless address =~ /^wave:\/\/(.+)\/w\+(.+)\/(.+)$/
 			[$1, $2, $3]
+		end
+		
+		# Formats some Base64 to make it valid enough for X509 to read it.
+		def self.format_x509 cert
+			return cert if cert.include? 'BEGIN CERTIFICATE'
+			cert = Base64.encode64(Base64.decode64(cert)) # add line breaks
+			"-----BEGIN CERTIFICATE-----\n#{cert}-----END CERTIFICATE-----\n"
 		end
 	
 	end

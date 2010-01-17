@@ -50,11 +50,7 @@ class Server
 	def certificates= certs
 		@certificates = certs.map do |cert|
 			if cert.is_a? String
-				unless cert.include? 'BEGIN CERTIFICATE'
-					cert = Base64.encode64(Base64.decode64(cert)) # add line breaks
-					cert = "-----BEGIN CERTIFICATE-----\n#{cert}-----END CERTIFICATE-----\n"
-				end
-				cert = OpenSSL::X509::Certificate.new cert
+				cert = OpenSSL::X509::Certificate.new Utils.format_x509(cert)
 			end
 			cert
 		end
