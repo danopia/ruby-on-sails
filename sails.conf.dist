@@ -1,0 +1,38 @@
+# Ruby on Sails Example Config File
+# Edit with care. This file is in YAML format. # denotes comments.
+
+# Name of the XMPP server and what goes after the @ in addresses
+domain-name: example.com
+
+# Service/subdomain that the provider runs as, i.e. "wave" runs the provider
+# at wave.*domain name*
+#
+# Comment out the whole line to use the domain name without a subdomain. May not work as expected.
+service-name: wave
+
+# Location(s) of your .cert/.crt/.pem file(s)
+# Put a dash before each file
+certificate-chain:
+  - /var/certs/mine.crt
+  - /var/certs/startssl-server-class1.pem
+  - /var/certs/startssl-root.pem
+
+# Location of your .key file
+private-key-path: /var/certs/mine.key
+
+# Connection details for the XMPP server. These values are used when connecting
+# as a component. If you run XMPP locally, use 'localhost'
+xmpp-connect-host: localhost
+xmpp-connect-port: 5275
+
+# Password used to connect as a component
+xmpp-password: waveftw
+
+# Hosts to ping when the server starts up, for testing purposes
+# Add a # before the next line to disable autoping
+ping: acmewave.com
+#danopia.net
+#killerswan.com
+
+# Identity name to send to other servers
+identity: Ruby on Sails - Danopia's Wave Server
