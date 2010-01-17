@@ -4,7 +4,7 @@ task :default => ['provider:start']
 
 desc 'Start the provider as a XMPP component'
 task 'provider:start' do
-	ruby 'xmpp_component.rb'
+	ruby 'server.rb'
 end
 
 desc 'Start a thin instance, in the background'
