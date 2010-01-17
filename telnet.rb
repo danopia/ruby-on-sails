@@ -67,17 +67,7 @@ server.audit = true                  # Turn logging on.
 server.debug = true                  # Turn debugging on.
 server.start
 
-# *** Now point telnet to localhost to see it working ***
-
 sleep 10 until server.stopped?
-
-# See if it's still running.
-##GServer.in_service?(23)              # -> true
-##server.stopped?                      # -> false
 
 # Shut the server down gracefully.
 ##server.shutdown
-
-# Alternatively, stop it immediately.
-##GServer.stop(23)
-# or, of course, "server.stop".
