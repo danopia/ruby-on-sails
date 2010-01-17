@@ -17,7 +17,7 @@ require 'lib/xmpp/waveserver'
 
 require 'lib/protocol/server'
 
-# TODO: Set a 60-second timer to send a space
+# TODO: Set a 60-second timer to send a space to the XMPP server
 
 EventMachine.run {
 	provider = Sails::XMPP::WaveServer.load_and_connect 'sails.conf'
