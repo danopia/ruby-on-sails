@@ -7,9 +7,7 @@ class WaveServer < Component
 	def initialize config
 		super
 
-		@servers = ServerList.new
-		
-		@servers.provider = self
+		@servers = ServerList.new self
 
 		@local = Server.new self, @domain, @subdomain, false
 		@local.state = :local
