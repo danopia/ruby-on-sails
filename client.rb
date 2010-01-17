@@ -1,4 +1,4 @@
-require File.join(File.dirname(__FILE__), 'lib/protocol/client')
+require 'sails'
 
 class PlainClient < Sails::Protocol::Client
 end

@@ -15,8 +15,6 @@ require 'lib/xmpp/connection'
 require 'lib/xmpp/component'
 require 'lib/xmpp/waveserver'
 
-require 'lib/protocol/server'
-
 # TODO: Set a 60-second timer to send a space to the XMPP server
 
 EventMachine.run {
