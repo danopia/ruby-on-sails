@@ -22,7 +22,7 @@ class ServerClient
     if check_login username, password
       self.new nil, server, username, "#{username}@danopia.net"
     else
-      nil # TODO: Raise error
+      nil # TODO: Raise error (or at least something)
     end
   end
 end # class

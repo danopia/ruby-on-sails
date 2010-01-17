@@ -4,7 +4,7 @@ module Sails
 # Most popular class. Represents the local server and the waves on it, and
 # keeps a list of external servers.
 class Provider
-	attr_accessor :sock, :servers, :key, :domain, :name, :local, :packet_ids, :ready, :remote
+	attr_accessor :sock, :servers, :key, :domain, :name, :local, :packet_ids, :ready
 	
 	# Create a new provider.
 	def initialize(domain, subdomain='wave', sock=nil)
@@ -31,7 +31,6 @@ class Provider
 		return if ready?
 		@ready = true
 		flush
-		start_remote unless @remote
 	end
 	
 	# Load the provider's certificate from a file.
@@ -47,12 +46,6 @@ class Provider
 	# Signs a chunk of data using the private key.
 	def sign(data)
 		@key.sign OpenSSL::Digest::SHA1.new, data
-	end
-	
-	# Start up a new SailsRemote
-	def start_remote bind=':9000'
-		@remote = Remote.serve self, bind
-		puts "DRb server running at #{@remote.uri}"
 	end
 
 	# Create a socket to the XMPP server.

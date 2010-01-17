@@ -332,10 +332,10 @@ class Delta < BaseDelta
 			end
 		end
 		
-		if @wave.participants.include?('echoey@danopia.net') && @author != 'echoey@danopia.net'
-			puts 'poking Echoey'
-			Echoey.new.handle $remote, @wave, @operations.select {|op| op.is_a? Operations::Mutate }.map {|op| @wave.blip(op.document_id) }.uniq.first
-		end
+		#if @wave.participants.include?('echoey@danopia.net') && @author != 'echoey@danopia.net'
+			#puts 'poking Echoey'
+			#Echoey.new.handle $remote, @wave, @operations.select {|op| op.is_a? Operations::Mutate }.map {|op| @wave.blip(op.document_id) }.uniq.first
+		#end
 	end
 	
 end # class
